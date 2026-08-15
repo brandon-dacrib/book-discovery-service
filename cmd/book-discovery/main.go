@@ -249,12 +249,14 @@ func (s *server) rank(ctx context.Context, req discoverRequest, candidates []can
 		item.Reason = rank.Reason
 		out = append(out, item)
 	}
+	if len(out) == 0 {
+		return nil, errors.New("ollama returned no usable rankings")
+	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Confidence > out[j].Confidence })
 	return out, nil
 }
 
 func fallbackRank(req discoverRequest, in []candidate) []candidate {
-	want := strings.ToLower(strings.Join([]string{req.Title, req.Creator}, " "))
 	out := append([]candidate(nil), in...)
 	for i := range out {
 		hay := strings.ToLower(out[i].Title + " " + out[i].Content)
@@ -268,7 +270,6 @@ func fallbackRank(req discoverRequest, in []candidate) []candidate {
 		out[i].Reason = "title/creator text match"
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Confidence > out[j].Confidence })
-	_ = want
 	return out
 }
 func dedupe(in []candidate) []candidate {
