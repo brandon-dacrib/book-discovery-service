@@ -35,6 +35,7 @@ type config struct {
 	OllamaModel   string
 	ShelfarrURL   string
 	ShelfarrToken string
+	ShelfarrUser  string
 	ServiceToken  string
 	StatePath     string
 	Timeout       time.Duration
@@ -56,9 +57,13 @@ func loadConfig() config {
 		OllamaModel:   strings.TrimSpace(os.Getenv("OLLAMA_MODEL")),
 		ShelfarrURL:   strings.TrimRight(env("SHELFARR_URL", ""), "/"),
 		ShelfarrToken: env("SHELFARR_API_TOKEN", ""),
-		ServiceToken:  env("SERVICE_API_TOKEN", ""),
-		StatePath:     env("STATE_PATH", "/data/discovery-state.json"),
-		Timeout:       envDuration("REQUEST_TIMEOUT", 45*time.Second),
+		// Shelfarr attributes every request to a user and rejects the create
+		// with "User not found" when none is supplied. The API token is not
+		// itself bound to an account, so the owning user is configuration.
+		ShelfarrUser: env("SHELFARR_USER_ID", "1"),
+		ServiceToken: env("SERVICE_API_TOKEN", ""),
+		StatePath:    env("STATE_PATH", "/data/discovery-state.json"),
+		Timeout:      envDuration("REQUEST_TIMEOUT", 45*time.Second),
 		// Ranking runs against a local Ollama host that may need to page a large
 		// model in from disk first. A cold load costs far more than a warm one,
 		// and this service backs background/overnight work, so the budget is
@@ -625,16 +630,53 @@ func (s *server) shelfarrCreate(ctx context.Context, input createRequest) (map[s
 		"book_type":  bookType,
 		"book_types": []string{bookType},
 	}
+	if s.cfg.ShelfarrUser != "" {
+		if numeric, err := strconv.Atoi(s.cfg.ShelfarrUser); err == nil {
+			payload["user_id"] = numeric
+		} else {
+			payload["user_id"] = s.cfg.ShelfarrUser
+		}
+	}
 	for key, value := range metadata {
 		payload[key] = value
 	}
-	return s.shelfarrJSON(ctx, http.MethodPost, "/api/v1/requests", payload)
+	created, err := s.shelfarrJSON(ctx, http.MethodPost, "/api/v1/requests", payload)
+	if err != nil {
+		return nil, err
+	}
+	// Shelfarr answers 2xx while still reporting a per-book failure in
+	// `errors`, e.g. when an active request already exists for the work.
+	if messages := stringsFrom(created["errors"]); len(messages) > 0 {
+		return nil, fmt.Errorf("Shelfarr rejected the request: %s", strings.Join(messages, "; "))
+	}
+	return created, nil
+}
+
+// stringsFrom reads a JSON array of strings out of a decoded response.
+func stringsFrom(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 
 // derivativeWork matches editions that are *about* a book rather than the book
 // itself. Shelfarr's metadata source returns these inline with real works and
 // scores every row identically, so they routinely sort above the actual title.
-var derivativeWork = regexp.MustCompile(`(?i)study guide|lesson plan|summary & study|summaries|sparknotes|bookrags|supersummary|cengage|teacher'?s guide|\bcliffs?notes\b|box set|books \d+\s*-\s*\d+|series by .* \d+ books`)
+var derivativeWork = regexp.MustCompile(`(?i)study guide|lesson plan|\bsummary\b|summaries|sparknotes|bookrags|supersummary|cengage|quickread|flashbooks|teacher'?s guide|\bcliffs?notes\b|\bworkbook\b|\bcompanion\b|box set|omnibus|collection set|\bsampler\b|books \d+\s*-\s*\d+|series by .* \d+ books|book guide|` +
+	// Catalogues also carry merchandise that borrows the title verbatim: blank
+	// notebooks, journals, and quiz books credited to unrelated "authors".
+	`\bnotebook\b|\bjournal\b|\bplanner\b|coloring book|\bdiary\b|\bcalendar\b|trivia|quiz book|\bunofficial\b|` +
+	// Serialized comic adaptations carry an issue number and are not the novel:
+	// "Robert Jordan's Wheel of Time: Eye of the World #5" outranked the book.
+	`#\s*\d+`)
 
 // resolveWork picks the Shelfarr work a request should be filed against.
 //
@@ -657,6 +699,15 @@ func (s *server) resolveWork(ctx context.Context, input createRequest, results [
 	}
 	if len(eligible) == 0 {
 		return pickShelfarrResult(results, bookType)
+	}
+	// Narrow to candidates actually titled like the request before involving
+	// the model. This removes whole classes of near-miss by construction —
+	// omnibus editions ("Charlotte's Web with Stuart Little and The Trumpet of
+	// the Swan"), workbooks, and other volumes in a series all carry a
+	// different title — leaving the model to do the part it is good at:
+	// telling genuine editions of the same work apart.
+	if titled := filterTitleMatches(eligible, input); len(titled) > 0 {
+		eligible = titled
 	}
 	if len(eligible) == 1 || s.cfg.OllamaURL == "" {
 		return pickShelfarrResult(eligible, bookType)
@@ -683,9 +734,15 @@ func (s *server) rankWorks(ctx context.Context, input createRequest, results []s
 	if err != nil {
 		return shelfarrResult{}, err
 	}
-	prompt := fmt.Sprintf("Pick the ONE candidate that is the actual literary work being requested. "+
-		"Reject study guides, summaries, lesson plans, academic analyses, box sets, and other volumes in the same series. "+
-		"Requested: title=%q author=%q. Candidates: %s. "+
+	// The rejection list is explicit because every category named here was
+	// observed winning on a real query against this cluster's Shelfarr.
+	prompt := fmt.Sprintf("Pick the ONE candidate that is the actual original work being requested.\n"+
+		"REJECT: summaries, study guides, lesson plans, workbooks, companions, academic analyses or criticism, "+
+		"biographies of the author, box sets, omnibus editions, and bundles listing several different titles.\n"+
+		"REJECT other volumes in the same series: the requested title must match, not merely the series.\n"+
+		"A subtitle after a colon is fine and usually indicates the real edition.\n"+
+		"Prefer the edition credited to the requested author.\n"+
+		"Requested: title=%q author=%q.\nCandidates: %s\n"+
 		`Return ONLY JSON: {"index": <int>, "confidence": <0-1>, "reason": "<short>"}`,
 		input.Title, input.Creator, data)
 
@@ -739,16 +796,211 @@ func pickShelfarrResult(results []shelfarrResult, bookType string) (shelfarrResu
 	return best, nil
 }
 
+// shelfarrSearchLimit is deliberately well above the number of candidates a
+// person would look at. Popular titles attract so many summaries, workbooks,
+// and companions that the original work falls outside the first ten results:
+// at limit=10 neither "Dune" nor "Atomic Habits" appeared at all, and both are
+// present at 25. Recall, not ranking, was the binding constraint.
+const shelfarrSearchLimit = "25"
+
+// shelfarrSearch queries by title with the author and by title alone, then
+// merges the two. Including the author usually sharpens the match but
+// sometimes collapses it — "Charlotte's Web E. B. White" returns three results
+// and none is the book, while "Charlotte's Web" returns fifteen and does.
 func (s *server) shelfarrSearch(ctx context.Context, input createRequest) (shelfarrSearchResponse, error) {
-	query := strings.TrimSpace(strings.Join([]string{input.Title, input.Creator}, " "))
+	return s.shelfarrSearchWithRetry(ctx, input, true)
+}
+
+func (s *server) shelfarrSearchWithRetry(ctx context.Context, input createRequest, retry bool) (shelfarrSearchResponse, error) {
+	queries := uniqueNonEmpty([]string{
+		strings.Join([]string{input.Title, input.Creator}, " "),
+		input.Title,
+	})
+	var merged shelfarrSearchResponse
+	seen := map[string]bool{}
+	var lastErr error
+	for _, query := range queries {
+		found, err := s.shelfarrSearchOnce(ctx, query)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for _, result := range found.Results {
+			key := result.WorkID
+			if key == "" {
+				key = result.Title + "|" + result.Author
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			merged.Results = append(merged.Results, result)
+		}
+		// Shelfarr proxies these lookups to an upstream metadata provider that
+		// rate limits, so the broader query only runs when the narrow one did
+		// not already contain something titled like the request.
+		if hasTitleMatch(merged.Results, input.Title) {
+			break
+		}
+	}
+	if len(merged.Results) == 0 && lastErr != nil {
+		return shelfarrSearchResponse{}, lastErr
+	}
+	if len(merged.Results) == 0 && retry {
+		// Shelfarr proxies to a metadata provider that throttles by returning
+		// 200 with an empty result set, which is indistinguishable from a
+		// genuine miss. Observed recovery is on the order of a minute, so one
+		// bounded retry separates a throttle from "no such book".
+		select {
+		case <-ctx.Done():
+			return merged, ctx.Err()
+		case <-time.After(shelfarrRetryDelay):
+		}
+		log.Printf("Shelfarr metadata search returned nothing for %q; retrying once", input.Title)
+		return s.shelfarrSearchWithRetry(ctx, input, false)
+	}
+	return merged, nil
+}
+
+// shelfarrRetryDelay is a variable so tests do not have to wait it out.
+var shelfarrRetryDelay = 5 * time.Second
+
+// hasTitleMatch reports whether some non-derivative result is plausibly the
+// requested work, judged on the title alone.
+func hasTitleMatch(results []shelfarrResult, title string) bool {
+	for _, result := range results {
+		if !derivativeWork.MatchString(result.Title) && titleMatches(result, title, "") {
+			return true
+		}
+	}
+	return false
+}
+
+func filterTitleMatches(results []shelfarrResult, input createRequest) []shelfarrResult {
+	out := make([]shelfarrResult, 0, len(results))
+	for _, result := range results {
+		if derivativeWork.MatchString(result.Title) {
+			continue
+		}
+		if titleMatches(result, input.Title, input.Creator) {
+			out = append(out, result)
+		}
+	}
+	// When the requested author is known and some candidate is credited to
+	// them, drop the rest. Catalogues list merchandise and knock-offs under
+	// the real title but a different author, and those survive a title test.
+	if input.Creator != "" {
+		byAuthor := make([]shelfarrResult, 0, len(out))
+		for _, result := range out {
+			if authorMatches(result.Author, input.Creator) {
+				byAuthor = append(byAuthor, result)
+			}
+		}
+		if len(byAuthor) > 0 {
+			out = byAuthor
+		}
+	}
+	// Accent folding makes a translated edition compare equal to the original
+	// — a request for "Circe" matched the French "Circé" — so prefer titles
+	// that match without needing the fold. Requesting a translation still
+	// works, because then the folded form is what the caller typed.
+	exact := make([]shelfarrResult, 0, len(out))
+	for _, result := range out {
+		if titleMatchesUnfolded(result, input.Title) {
+			exact = append(exact, result)
+		}
+	}
+	if len(exact) > 0 {
+		return exact
+	}
+	return out
+}
+
+func titleMatchesUnfolded(result shelfarrResult, title string) bool {
+	want := strings.TrimSpace(titleNoise.ReplaceAllString(strings.ToLower(title), " "))
+	if want == "" {
+		return false
+	}
+	candidate := strings.TrimSpace(titleNoise.ReplaceAllString(strings.ToLower(result.Title), " "))
+	before := strings.TrimSpace(titleNoise.ReplaceAllString(strings.ToLower(strings.SplitN(result.Title, ":", 2)[0]), " "))
+	return candidate == want || before == want
+}
+
+// authorMatches compares on surname, which survives the initials, accents, and
+// ordering differences between catalogues ("E. B. White" vs "E.B White").
+func authorMatches(candidate, requested string) bool {
+	fields := strings.Fields(normalizeTitle(requested))
+	if len(fields) == 0 {
+		return false
+	}
+	surname := fields[len(fields)-1]
+	if len(surname) < 3 {
+		return strings.Contains(normalizeTitle(candidate), normalizeTitle(requested))
+	}
+	return strings.Contains(normalizeTitle(candidate), surname)
+}
+
+// titleMatches compares the request against the whole title, the part before a
+// subtitle, and — when a catalogue prefixes the author, as in
+// "Plato : The Republic" — the part after it.
+func titleMatches(result shelfarrResult, title, creator string) bool {
+	want := normalizeTitle(title)
+	if want == "" {
+		return false
+	}
+	if normalizeTitle(result.Title) == want {
+		return true
+	}
+	before, after, found := strings.Cut(result.Title, ":")
+	if normalizeTitle(before) == want {
+		return true
+	}
+	if found && creator != "" {
+		fields := strings.Fields(normalizeTitle(creator))
+		if len(fields) > 0 && strings.Contains(normalizeTitle(before), fields[len(fields)-1]) {
+			return normalizeTitle(after) == want
+		}
+	}
+	return false
+}
+
+var titleNoise = regexp.MustCompile(`[^a-z0-9]+`)
+
+// foldAccents maps the accented Latin letters that appear in author and title
+// data to ASCII. Catalogues disagree on diacritics — "Gabriel García Márquez"
+// against a request for "Gabriel Garcia Marquez" — and folding keeps that from
+// silently defeating the author check. Done by hand to avoid pulling in
+// golang.org/x/text for one comparison.
+var accentFolds = strings.NewReplacer(
+	"á", "a", "à", "a", "â", "a", "ä", "a", "ã", "a", "å", "a", "ā", "a",
+	"é", "e", "è", "e", "ê", "e", "ë", "e", "ē", "e",
+	"í", "i", "ì", "i", "î", "i", "ï", "i", "ī", "i",
+	"ó", "o", "ò", "o", "ô", "o", "ö", "o", "õ", "o", "ø", "o", "ō", "o",
+	"ú", "u", "ù", "u", "û", "u", "ü", "u", "ū", "u",
+	"ñ", "n", "ç", "c", "ý", "y", "ÿ", "y", "š", "s", "ž", "z", "ł", "l",
+	"æ", "ae", "œ", "oe", "ß", "ss", "đ", "d", "ð", "d", "þ", "th",
+)
+
+// normalizeTitle lowercases, folds accents, drops punctuation, and removes a
+// leading article so "The Joy of Cooking" and "Joy of Cooking" compare equal.
+func normalizeTitle(value string) string {
+	folded := accentFolds.Replace(strings.ToLower(value))
+	cleaned := strings.TrimSpace(titleNoise.ReplaceAllString(folded, " "))
+	for _, article := range []string{"the ", "a ", "an "} {
+		cleaned = strings.TrimPrefix(cleaned, article)
+	}
+	return strings.TrimSpace(cleaned)
+}
+
+func (s *server) shelfarrSearchOnce(ctx context.Context, query string) (shelfarrSearchResponse, error) {
 	u, err := url.Parse(s.cfg.ShelfarrURL + "/api/v1/search")
 	if err != nil {
 		return shelfarrSearchResponse{}, err
 	}
 	values := u.Query()
-	values.Set("q", query)
+	values.Set("q", strings.TrimSpace(query))
 	values.Set("content_kind", "book")
-	values.Set("limit", "10")
+	values.Set("limit", shelfarrSearchLimit)
 	u.RawQuery = values.Encode()
 	var decoded shelfarrSearchResponse
 	if err := s.shelfarrJSONInto(ctx, http.MethodGet, u.String(), nil, &decoded); err != nil {

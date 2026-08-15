@@ -11,18 +11,46 @@ and reports the **same confidence score for every row**, so neither its
 ordering nor its score can separate them. Requesting the first result therefore
 files the wrong work a large fraction of the time.
 
-Measured against eight ambiguous titles on a live instance:
+Measured on a live instance across 25 genres, from literary fiction and
+translated works to cookbooks, poetry, graphic novels, and self-published
+progression fantasy:
 
 | selection strategy | correct |
 | --- | --- |
-| Shelfarr's first result | 4/8 |
-| deterministic filter on derivative titles | 6/8 |
-| **local model reranking Shelfarr's own results** | **8/8** |
+| Shelfarr's first result | 15/50 |
+| **this service** | **50/50** |
 
-The failures were not obscure: *Kafka on the Shore* resolved to a Gale Cengage
+A third set of 25 could not be scored cleanly: Shelfarr's upstream metadata
+provider rate limits, and returns HTTP 200 with an empty result set when it
+does, so a third of that run failed for reasons unrelated to selection. See
+the note on retries below.
+
+The failures were not obscure. *Kafka on the Shore* resolved to a Gale Cengage
 study guide, *The Sandman* to a BookRags lesson plan, *Leviathan Wakes* to a
-box set, and *Dungeon Crawler Carl* to book 8 of the series. In every case the
-correct work was present in the results, just not first.
+box set, *Dungeon Crawler Carl* to book 8 of the series, and *Circe* to a blank
+notebook sold under the novel's name.
+
+Three things were wrong, and the order matters:
+
+1. **Recall, not ranking, was the binding constraint.** At Shelfarr's default
+   result count neither *Dune* nor *Atomic Habits* appeared at all — summaries
+   and companions filled every slot. Asking for more candidates fixed both.
+2. **The obvious query is not always the best one.** Adding the author usually
+   sharpens the match but sometimes collapses it: `Charlotte's Web E. B. White`
+   returned three results and none was the book, while `Charlotte's Web`
+   returned fifteen and did. A title-only retry runs when the first query comes
+   back without anything titled like the request.
+3. **Most of the remaining work is deterministic.** Filtering to candidates
+   whose title and author actually match the request removes omnibus editions,
+   workbooks, merchandise, comic adaptations, and other volumes in a series by
+   construction. The model is only consulted for what is left. Across the 50
+   scored resolutions, **58% never called a model at all** — the filters left a
+   single candidate — and the rest took a few seconds each.
+
+Shelfarr's upstream provider signals throttling as HTTP 200 with an empty
+result set, which is indistinguishable from "no such book". The service waits
+and retries once so a throttle does not get reported as a miss, and issues the
+broader second query only when the first did not already contain a title match.
 
 `POST /v1/resolve` performs that selection and returns a `work_id`, so the
 result is actionable rather than advisory. `POST /v1/requests` uses the same

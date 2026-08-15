@@ -269,8 +269,16 @@ func newShelfarrStub(t *testing.T, basePath string, seen *[]string) *httptest.Se
 				http.Error(w, "missing work_id", http.StatusUnprocessableEntity)
 				return
 			}
+			// Live Shelfarr rejects a create with "User not found" unless the
+			// owning user is supplied.
+			if _, ok := payload["user_id"]; !ok {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"errors":["User not found"]}`))
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"req-99","status":"pending","work_id":"w-1"}`))
+			// Mirrors the live envelope, which is a list plus queue metadata.
+			_, _ = w.Write([]byte(`{"requests":[{"id":"req-99","status":"searching","work_id":"w-1"}],"queued":true,"warnings":[],"errors":[]}`))
 		default:
 			http.Error(w, "not found", http.StatusNotFound)
 		}
@@ -287,6 +295,7 @@ func newRequestServer(t *testing.T, shelfarrURL string) *server {
 		cfg: config{
 			ShelfarrURL:   shelfarrURL,
 			ShelfarrToken: "shelfarr-token",
+			ShelfarrUser:  "1",
 			Timeout:       10 * time.Second,
 			OllamaTimeout: 10 * time.Second,
 		},
@@ -312,7 +321,12 @@ func TestCreateShelfarrRequestResolvesWorkAndCreates(t *testing.T) {
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
-	want := []string{"GET /requests/api/v1/search", "POST /requests/api/v1/requests"}
+	// The first query already contains a title match, so the broader
+	// title-only query is skipped and the request is filed.
+	want := []string{
+		"GET /requests/api/v1/search",
+		"POST /requests/api/v1/requests",
+	}
 	if strings.Join(seen, ",") != strings.Join(want, ",") {
 		t.Fatalf("calls = %v, want %v", seen, want)
 	}
@@ -339,6 +353,7 @@ func TestCreateShelfarrRequestIsIdempotent(t *testing.T) {
 	if code := post().Code; code != http.StatusAccepted {
 		t.Fatalf("first call status = %d", code)
 	}
+	afterFirst := len(seen)
 	second := post()
 	if second.Code != http.StatusOK {
 		t.Fatalf("replay status = %d, want 200", second.Code)
@@ -346,9 +361,9 @@ func TestCreateShelfarrRequestIsIdempotent(t *testing.T) {
 	if !strings.Contains(second.Body.String(), "req-99") {
 		t.Fatalf("replay lost the recorded response: %s", second.Body.String())
 	}
-	// Two calls total: the replay must not reach Shelfarr again.
-	if len(seen) != 2 {
-		t.Fatalf("upstream calls = %v, want the replay served from state", seen)
+	// The replay must be served from state without touching Shelfarr again.
+	if len(seen) != afterFirst {
+		t.Fatalf("replay issued extra upstream calls: %v", seen[afterFirst:])
 	}
 }
 
@@ -370,6 +385,39 @@ func TestCreateShelfarrRequestRejectsBadToken(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "401") {
 		t.Fatalf("error did not surface the upstream 401: %s", w.Body.String())
+	}
+}
+
+// TestCreateShelfarrRequestSurfacesInlineErrors covers Shelfarr answering 2xx
+// while reporting a per-book failure in `errors`, which is what a duplicate
+// active request looks like.
+func TestCreateShelfarrRequestSurfacesInlineErrors(t *testing.T) {
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/search") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"results":[{"work_id":"w-1","title":"Dune","author":"Frank Herbert","year":1965,"confidence":70,"available_book_types":["audiobook"]}]}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"requests":[],"queued":false,"warnings":[],"errors":["Dune Audiobook: This audiobook already has an active request."]}`))
+	}))
+	defer stub.Close()
+	s := newRequestServer(t, stub.URL)
+	s.cfg.ShelfarrToken = ""
+	s.cfg.ShelfarrURL = stub.URL
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/requests",
+		strings.NewReader(`{"kind":"audiobook","title":"Dune","creator":"Frank Herbert"}`))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.cfg.ShelfarrToken = "shelfarr-token"
+	s.createShelfarrRequest(w, r)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502 when Shelfarr reports an inline error", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "already has an active request") {
+		t.Fatalf("error not surfaced: %s", w.Body.String())
 	}
 }
 
@@ -416,6 +464,174 @@ func TestShelfarrSearchDecodesRealResponse(t *testing.T) {
 // TestPickShelfarrResultPrefersRealWorkOverDerivatives reproduces the live
 // failure: Shelfarr returns a study guide first and scores every row 70, so
 // score alone cannot separate them.
+// TestShelfarrSearchWidensOnlyWhenNeeded pins the rate-limit-conscious
+// behaviour: including the author sometimes collapses recall (the live
+// "Charlotte's Web E. B. White" query returned three results, none of them the
+// book), so a title-only retry runs — but only when the first query came back
+// without anything titled like the request.
+func TestShelfarrSearchWidensOnlyWhenNeeded(t *testing.T) {
+	var queries []string
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		queries = append(queries, q)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(q, "White") {
+			// Narrow query: only an omnibus, no standalone edition.
+			_, _ = w.Write([]byte(`{"results":[{"work_id":"w-omni","title":"Charlotte's Web with Stuart Little","author":"E.B. White","available_book_types":["audiobook"]}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"results":[{"work_id":"w-real","title":"Charlotte's Web","author":"E. B. White","available_book_types":["audiobook"]}]}`))
+	}))
+	defer stub.Close()
+	s := &server{cfg: config{ShelfarrURL: stub.URL, ShelfarrToken: "t"}, client: stub.Client()}
+
+	found, err := s.shelfarrSearch(context.Background(),
+		createRequest{Title: "Charlotte's Web", Creator: "E. B. White"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queries) != 2 {
+		t.Fatalf("queries = %v, want the title-only retry", queries)
+	}
+	if !hasTitleMatch(found.Results, "Charlotte's Web") {
+		t.Fatalf("merged results still lack the work: %+v", found.Results)
+	}
+
+	// A first query that already matches must not trigger the retry.
+	queries = nil
+	if _, err := s.shelfarrSearch(context.Background(),
+		createRequest{Title: "Charlotte's Web"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(queries) != 1 {
+		t.Fatalf("queries = %v, want a single lookup", queries)
+	}
+}
+
+// TestShelfarrSearchRetriesEmptyResults covers upstream throttling, which
+// presents as 200 with no results rather than a 429.
+func TestShelfarrSearchRetriesEmptyResults(t *testing.T) {
+	previous := shelfarrRetryDelay
+	shelfarrRetryDelay = time.Millisecond
+	defer func() { shelfarrRetryDelay = previous }()
+
+	var calls int
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		if calls <= 2 {
+			_, _ = w.Write([]byte(`{"results":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"results":[{"work_id":"w-1","title":"Dune","author":"Frank Herbert","available_book_types":["audiobook"]}]}`))
+	}))
+	defer stub.Close()
+	s := &server{cfg: config{ShelfarrURL: stub.URL, ShelfarrToken: "t"}, client: stub.Client()}
+
+	found, err := s.shelfarrSearch(context.Background(),
+		createRequest{Title: "Dune", Creator: "Frank Herbert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found.Results) == 0 {
+		t.Fatal("retry did not recover results")
+	}
+	// Two empty attempts, then the retry pass succeeds on its first query.
+	if calls < 3 {
+		t.Fatalf("calls = %d, want a retry after the empty responses", calls)
+	}
+}
+
+// TestFilterTitleMatchesRejectsNearMisses pins the shapes that reached the
+// model and were chosen wrongly before this filter existed.
+func TestFilterTitleMatchesRejectsNearMisses(t *testing.T) {
+	input := createRequest{Title: "Charlotte's Web", Creator: "E. B. White"}
+	results := []shelfarrResult{
+		{WorkID: "w-omni", Title: "Charlotte's Web with Stuart Little and The Trumpet of the Swan", Author: "E.B. White"},
+		{WorkID: "w-real", Title: "Charlotte's Web: The Classic Children's Story", Author: "E. B White"},
+		{WorkID: "w-about", Title: "E.B. White: Some Writer! All about the author of Charlotte's Web", Author: "Beverly Gherman"},
+	}
+	kept := filterTitleMatches(results, input)
+	if len(kept) != 1 || kept[0].WorkID != "w-real" {
+		t.Fatalf("kept %+v, want only the standalone edition", kept)
+	}
+
+	// "Author : Title" catalogue form must still match.
+	plato := []shelfarrResult{{WorkID: "w-p", Title: "Plato : The Republic", Author: "Plato"}}
+	if got := filterTitleMatches(plato, createRequest{Title: "The Republic", Creator: "Plato"}); len(got) != 1 {
+		t.Fatalf("author-prefixed title was rejected: %+v", got)
+	}
+
+	// A leading article difference is not a mismatch.
+	joy := []shelfarrResult{{WorkID: "w-j", Title: "Joy of Cooking", Author: "Irma S. Rombauer"}}
+	if got := filterTitleMatches(joy, createRequest{Title: "The Joy of Cooking", Creator: "Irma Rombauer"}); len(got) != 1 {
+		t.Fatalf("article difference rejected the match: %+v", got)
+	}
+
+	// Nothing matching leaves the caller to fall back rather than inventing one.
+	if got := filterTitleMatches(results, createRequest{Title: "Some Other Book"}); len(got) != 0 {
+		t.Fatalf("expected no matches, got %+v", got)
+	}
+
+	// Merchandise borrows the title but is credited to someone else. Observed
+	// live: a blank notebook outranked the novel.
+	circe := []shelfarrResult{
+		{WorkID: "w-merch", Title: "Circe: Madeline Miller Notebook with 8. 5 X 11 in 100 Pages", Author: "Idriss Pedro"},
+		{WorkID: "w-real", Title: "Circe", Author: "Madeline Miller"},
+	}
+	got := filterTitleMatches(circe, createRequest{Title: "Circe", Creator: "Madeline Miller"})
+	if len(got) != 1 || got[0].WorkID != "w-real" {
+		t.Fatalf("kept %+v, want only the novel", got)
+	}
+}
+
+// TestFilterTitleMatchesPrefersUntranslatedEdition covers a live result where
+// the French "Circé" tied with the English "Circe" after accent folding.
+func TestFilterTitleMatchesPrefersUntranslatedEdition(t *testing.T) {
+	results := []shelfarrResult{
+		{WorkID: "w-fr", Title: "Circé", Author: "Madeline Miller"},
+		{WorkID: "w-en", Title: "Circe", Author: "Madeline Miller"},
+	}
+	got := filterTitleMatches(results, createRequest{Title: "Circe", Creator: "Madeline Miller"})
+	if len(got) != 1 || got[0].WorkID != "w-en" {
+		t.Fatalf("kept %+v, want the edition matching without accent folding", got)
+	}
+	// Asking for the translation still resolves to it.
+	got = filterTitleMatches(results, createRequest{Title: "Circé", Creator: "Madeline Miller"})
+	if len(got) != 1 || got[0].WorkID != "w-fr" {
+		t.Fatalf("kept %+v, want the French edition", got)
+	}
+}
+
+func TestAuthorMatchesToleratesCatalogueFormatting(t *testing.T) {
+	for _, tc := range []struct {
+		candidate, requested string
+		want                 bool
+	}{
+		{"E.B White", "E. B. White", true},
+		{"Gabriel García Márquez", "Gabriel Garcia Marquez", true}, // accents folded
+		{"Irma S. Rombauer", "Irma Rombauer", true},
+		{"Idriss Pedro", "Madeline Miller", false},
+	} {
+		if got := authorMatches(tc.candidate, tc.requested); got != tc.want {
+			t.Fatalf("authorMatches(%q, %q) = %v, want %v", tc.candidate, tc.requested, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizeTitleIgnoresArticlesAndPunctuation(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"The Joy of Cooking", "joy of cooking"},
+		{"Joy of Cooking", "joy of cooking"},
+		{"Salt, Fat, Acid, Heat", "salt fat acid heat"},
+		{"Ender's Game", "ender s game"},
+	} {
+		if got := normalizeTitle(tc.in); got != tc.want {
+			t.Fatalf("normalizeTitle(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestPickShelfarrResultPrefersRealWorkOverDerivatives(t *testing.T) {
 	results := []shelfarrResult{
 		{WorkID: "w-guide", Title: `A Study Guide for Haruki Murakami's "Kafka on the Shore"`, Author: "Gale Cengage Learning", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
