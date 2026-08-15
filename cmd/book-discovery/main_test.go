@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -252,7 +253,12 @@ func newShelfarrStub(t *testing.T, basePath string, seen *[]string) *httptest.Se
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"results":[{"work_id":"w-1","title":"Project Hail Mary","author":"Andy Weir","year":"2021","source":"hardcover","source_id":"42"}]}`))
+			// Mirrors the live payload: `year` is a number, and availability is
+			// reported through confidence/has_*/available_book_types.
+			_, _ = w.Write([]byte(`{"results":[
+				{"work_id":"w-omnibus","title":"Project Hail Mary / Artemis / The Martian","author":"Andy Weir","year":2022,"source":"hardcover","source_id":"99","confidence":70,"has_audiobook":false,"has_ebook":true,"available_book_types":["ebook"]},
+				{"work_id":"w-1","title":"Project Hail Mary","author":"Andy Weir","year":2021,"source":"hardcover","source_id":"42","confidence":70,"has_audiobook":true,"has_ebook":true,"available_book_types":["audiobook","ebook"]}
+			]}`))
 		case r.Method == http.MethodPost && r.URL.Path == basePath+"/api/v1/requests":
 			var payload map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -376,6 +382,131 @@ func TestCreateShelfarrRequestRequiresConfiguration(t *testing.T) {
 	s.createShelfarrRequest(w, r)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503 when Shelfarr is unconfigured", w.Code)
+	}
+}
+
+// TestShelfarrSearchDecodesRealResponse guards against the stub drifting from
+// the live API. The fixture is a verbatim response from a running Shelfarr; it
+// caught `year` arriving as a JSON number while the struct declared a string,
+// which made every real metadata lookup fail to decode.
+func TestShelfarrSearchDecodesRealResponse(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "shelfarr_search.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded shelfarrSearchResponse
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("live Shelfarr response does not decode: %v", err)
+	}
+	if len(decoded.Results) == 0 {
+		t.Fatal("no results decoded")
+	}
+	first := decoded.Results[0]
+	if first.WorkID != "hardcover:427578" {
+		t.Fatalf("work_id = %q", first.WorkID)
+	}
+	if first.Title != "Project Hail Mary" || first.Author != "Andy Weir" {
+		t.Fatalf("title/author = %q / %q", first.Title, first.Author)
+	}
+	if first.Year != "2021" {
+		t.Fatalf("year = %q, want 2021 rendered as text", first.Year)
+	}
+}
+
+// TestPickShelfarrResultPrefersRealWorkOverDerivatives reproduces the live
+// failure: Shelfarr returns a study guide first and scores every row 70, so
+// score alone cannot separate them.
+func TestPickShelfarrResultPrefersRealWorkOverDerivatives(t *testing.T) {
+	results := []shelfarrResult{
+		{WorkID: "w-guide", Title: `A Study Guide for Haruki Murakami's "Kafka on the Shore"`, Author: "Gale Cengage Learning", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w-lesson", Title: "Kafka on the Shore l Summary & Study Guide", Author: "BookRags", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w-real", Title: "Kafka on the Shore", Author: "Haruki Murakami", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+	}
+	best, err := pickShelfarrResult(results, "audiobook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if best.WorkID != "w-real" {
+		t.Fatalf("picked %q (%s), want the novel", best.WorkID, best.Title)
+	}
+}
+
+// TestResolveWorkUsesModelChoice covers the path that measured 8/8 live where
+// first-result selection measured 4/8.
+func TestResolveWorkUsesModelChoice(t *testing.T) {
+	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"models":[{"name":"gemma3:27b","size":100,"capabilities":["completion"]}]}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// Index 2 is the real novel; a naive pick would take index 0.
+		_, _ = w.Write([]byte(`{"message":{"content":"{\"index\":2,\"confidence\":0.95,\"reason\":\"actual novel\"}"}}`))
+	}))
+	defer ollama.Close()
+
+	s := &server{
+		cfg:    config{OllamaURL: ollama.URL, OllamaTimeout: 10 * time.Second},
+		client: ollama.Client(),
+	}
+	results := []shelfarrResult{
+		{WorkID: "w-a", Title: "A Parade of Horribles", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w-b", Title: "Carl's Doomsday Scenario", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w-real", Title: "Dungeon Crawler Carl", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+	}
+	best, err := s.resolveWork(context.Background(),
+		createRequest{Title: "Dungeon Crawler Carl", Creator: "Matt Dinniman"}, results, "audiobook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if best.WorkID != "w-real" {
+		t.Fatalf("resolved to %q, want the model's choice w-real", best.WorkID)
+	}
+}
+
+func TestResolveWorkFallsBackWhenModelUnavailable(t *testing.T) {
+	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "model gone", http.StatusInternalServerError)
+	}))
+	defer ollama.Close()
+	s := &server{
+		cfg:    config{OllamaURL: ollama.URL, OllamaTimeout: 5 * time.Second},
+		client: ollama.Client(),
+	}
+	results := []shelfarrResult{
+		{WorkID: "w-guide", Title: "Study Guide: Dungeon Crawler Carl", Confidence: 90, AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w-real", Title: "Dungeon Crawler Carl", Confidence: 70, AvailableBookTypes: []string{"audiobook"}},
+	}
+	best, err := s.resolveWork(context.Background(),
+		createRequest{Title: "Dungeon Crawler Carl"}, results, "audiobook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if best.WorkID != "w-real" {
+		t.Fatalf("fallback picked %q, want the non-derivative work", best.WorkID)
+	}
+}
+
+func TestPickShelfarrResultSkipsWrongFormat(t *testing.T) {
+	results := []shelfarrResult{
+		// Shelfarr returns omnibus and unrelated editions alongside the real
+		// work; this one would win under a naive results[0].
+		{WorkID: "w-omnibus", Title: "Omnibus", Confidence: 90, AvailableBookTypes: []string{"ebook"}},
+		{WorkID: "w-1", Title: "Project Hail Mary", Confidence: 70, AvailableBookTypes: []string{"audiobook", "ebook"}},
+	}
+	best, err := pickShelfarrResult(results, "audiobook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if best.WorkID != "w-1" {
+		t.Fatalf("picked %q, want the audiobook-capable work", best.WorkID)
+	}
+	if _, err := pickShelfarrResult(results[:1], "audiobook"); err == nil {
+		t.Fatal("expected an error when no result is available as an audiobook")
+	}
+	if _, err := pickShelfarrResult(nil, "audiobook"); err == nil {
+		t.Fatal("expected an error for an empty result set")
 	}
 }
 

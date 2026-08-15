@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -222,17 +223,73 @@ type stateStore struct {
 	entries []historyEntry
 }
 
+// flexString accepts a JSON string or number. Shelfarr returns `year` as a
+// number and there is no guarantee every metadata source agrees, so the field
+// is decoded permissively and rendered as text.
+type flexString string
+
+func (f *flexString) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || string(data) == "null" {
+		*f = ""
+		return nil
+	}
+	if data[0] == '"' {
+		var value string
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		*f = flexString(value)
+		return nil
+	}
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return err
+	}
+	*f = flexString(number.String())
+	return nil
+}
+
+type shelfarrResult struct {
+	WorkID   string     `json:"work_id"`
+	Title    string     `json:"title"`
+	Author   string     `json:"author"`
+	Year     flexString `json:"year"`
+	CoverURL string     `json:"cover_url"`
+	// Confidence is Shelfarr's own match score (0-100). Used to avoid
+	// requesting a wrong work when the query is ambiguous.
+	Confidence         float64  `json:"confidence"`
+	ContentKind        string   `json:"content_kind"`
+	Source             string   `json:"source"`
+	SourceID           string   `json:"source_id"`
+	HasAudiobook       bool     `json:"has_audiobook"`
+	HasEbook           bool     `json:"has_ebook"`
+	AvailableBookTypes []string `json:"available_book_types"`
+}
+
+// supportsBookType reports whether Shelfarr knows of an edition in the format
+// being requested, so an audiobook request is not filed against an
+// ebook-only work.
+func (r shelfarrResult) supportsBookType(bookType string) bool {
+	for _, available := range r.AvailableBookTypes {
+		if strings.EqualFold(available, bookType) {
+			return true
+		}
+	}
+	if len(r.AvailableBookTypes) > 0 {
+		return false
+	}
+	switch strings.ToLower(bookType) {
+	case "audiobook":
+		return r.HasAudiobook
+	case "ebook":
+		return r.HasEbook
+	}
+	return true
+}
+
 type shelfarrSearchResponse struct {
-	Results []struct {
-		WorkID      string `json:"work_id"`
-		Title       string `json:"title"`
-		Author      string `json:"author"`
-		Year        string `json:"year"`
-		CoverURL    string `json:"cover_url"`
-		ContentKind string `json:"content_kind"`
-		Source      string `json:"source"`
-		SourceID    string `json:"source_id"`
-	} `json:"results"`
+	Results []shelfarrResult `json:"results"`
 }
 
 type server struct {
@@ -267,6 +324,7 @@ func main() {
 	mux.HandleFunc("GET /v1/history", s.history)
 	mux.HandleFunc("POST /v1/discover", s.discover)
 	mux.HandleFunc("POST /v1/recommendations", s.recommendations)
+	mux.HandleFunc("POST /v1/resolve", s.resolve)
 	mux.HandleFunc("POST /v1/requests", s.createShelfarrRequest)
 
 	// Ranking can legitimately hold a connection open for minutes, so the write
@@ -313,7 +371,7 @@ func (s *server) health(w http.ResponseWriter, _ *http.Request) {
 func (s *server) capabilities(w http.ResponseWriter, _ *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]any{
 		"media_kinds": []string{"book", "audiobook", "ebook", "movie", "tv"},
-		"operations":  []string{"discover", "recommend", "create_request", "history"},
+		"operations":  []string{"discover", "recommend", "resolve", "create_request", "history"},
 		"request_backends": []map[string]any{{
 			"id":          "shelfarr",
 			"media_kinds": []string{"book", "audiobook", "ebook"},
@@ -455,6 +513,61 @@ func (s *server) createShelfarrRequest(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusAccepted, created)
 }
 
+// resolve runs the metadata lookup and work selection without filing anything,
+// so a caller can preview which work a request would target.
+func (s *server) resolve(w http.ResponseWriter, r *http.Request) {
+	if !s.authorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if s.cfg.ShelfarrURL == "" || s.cfg.ShelfarrToken == "" {
+		http.Error(w, "Shelfarr integration is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var input createRequest
+	if err := decodeJSON(r, &input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(input.Title) == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+	bookType := requestedBookType(input)
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout+s.cfg.OllamaTimeout)
+	defer cancel()
+	found, err := s.shelfarrSearch(ctx, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	best, err := s.resolveWork(ctx, input, found.Results, bookType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"work_id":    best.WorkID,
+		"title":      best.Title,
+		"author":     best.Author,
+		"year":       string(best.Year),
+		"book_type":  bookType,
+		"cover_url":  best.CoverURL,
+		"candidates": len(found.Results),
+	})
+}
+
+// requestedBookType maps the caller's media kind onto Shelfarr's book types.
+func requestedBookType(input createRequest) string {
+	if input.BookType != "" {
+		return input.BookType
+	}
+	if strings.EqualFold(input.Kind, "ebook") || strings.EqualFold(input.Kind, "book") {
+		return "ebook"
+	}
+	return "audiobook"
+}
+
 func (s *server) authorized(r *http.Request) bool {
 	if s.cfg.ServiceToken == "" {
 		return true
@@ -482,19 +595,17 @@ func (s *server) shelfarrCreate(ctx context.Context, input createRequest) (map[s
 	if input.ISBN != "" {
 		metadata["notes"] = strings.TrimSpace(strings.Join([]string{input.Notes, "ISBN: " + input.ISBN}, "\n"))
 	}
+	bookType := requestedBookType(input)
 	if workID == "" {
 		resolved, err := s.shelfarrSearch(ctx, input)
 		if err != nil {
 			return nil, err
 		}
-		if len(resolved.Results) == 0 {
-			return nil, errors.New("Shelfarr metadata search found no matching work")
+		best, err := s.resolveWork(ctx, input, resolved.Results, bookType)
+		if err != nil {
+			return nil, err
 		}
-		best := resolved.Results[0]
 		workID = best.WorkID
-		if workID == "" {
-			return nil, errors.New("Shelfarr metadata result did not include a work_id")
-		}
 		if best.Title != "" {
 			metadata["title"] = best.Title
 		}
@@ -502,19 +613,12 @@ func (s *server) shelfarrCreate(ctx context.Context, input createRequest) (map[s
 			metadata["author"] = best.Author
 		}
 		if best.Year != "" {
-			metadata["year"] = best.Year
+			metadata["year"] = string(best.Year)
 		}
 		if best.CoverURL != "" {
 			metadata["cover_url"] = best.CoverURL
 		}
 		metadata["source_work_ids"] = []string{best.Source + ":" + best.SourceID}
-	}
-	bookType := input.BookType
-	if bookType == "" {
-		bookType = "audiobook"
-		if strings.EqualFold(input.Kind, "ebook") || strings.EqualFold(input.Kind, "book") {
-			bookType = "ebook"
-		}
 	}
 	payload := map[string]any{
 		"work_id":    workID,
@@ -525,6 +629,114 @@ func (s *server) shelfarrCreate(ctx context.Context, input createRequest) (map[s
 		payload[key] = value
 	}
 	return s.shelfarrJSON(ctx, http.MethodPost, "/api/v1/requests", payload)
+}
+
+// derivativeWork matches editions that are *about* a book rather than the book
+// itself. Shelfarr's metadata source returns these inline with real works and
+// scores every row identically, so they routinely sort above the actual title.
+var derivativeWork = regexp.MustCompile(`(?i)study guide|lesson plan|summary & study|summaries|sparknotes|bookrags|supersummary|cengage|teacher'?s guide|\bcliffs?notes\b|box set|books \d+\s*-\s*\d+|series by .* \d+ books`)
+
+// resolveWork picks the Shelfarr work a request should be filed against.
+//
+// This is the step that most needs judgement. Shelfarr returns the real book
+// alongside study guides, academic theses, box sets, and other volumes in the
+// same series, and reports the same confidence for all of them, so neither
+// ordering nor score can separate them. Measured against a sample of ambiguous
+// titles, taking the first result was correct half the time; asking the model
+// to choose was correct every time.
+//
+// The model only ever picks an index from the list, so a bad answer can pick
+// the wrong book but cannot invent one. When the model is unavailable the
+// deterministic filter below still removes the most common derivative works.
+func (s *server) resolveWork(ctx context.Context, input createRequest, results []shelfarrResult, bookType string) (shelfarrResult, error) {
+	eligible := make([]shelfarrResult, 0, len(results))
+	for _, result := range results {
+		if result.WorkID != "" && result.supportsBookType(bookType) {
+			eligible = append(eligible, result)
+		}
+	}
+	if len(eligible) == 0 {
+		return pickShelfarrResult(results, bookType)
+	}
+	if len(eligible) == 1 || s.cfg.OllamaURL == "" {
+		return pickShelfarrResult(eligible, bookType)
+	}
+	selected, err := s.rankWorks(ctx, input, eligible)
+	if err != nil {
+		log.Printf("work resolution falling back to heuristics: %v", err)
+		return pickShelfarrResult(eligible, bookType)
+	}
+	return selected, nil
+}
+
+func (s *server) rankWorks(ctx context.Context, input createRequest, results []shelfarrResult) (shelfarrResult, error) {
+	candidates := make([]map[string]any, 0, len(results))
+	for i, result := range results {
+		candidates = append(candidates, map[string]any{
+			"index":  i,
+			"title":  result.Title,
+			"author": result.Author,
+			"year":   string(result.Year),
+		})
+	}
+	data, err := json.Marshal(candidates)
+	if err != nil {
+		return shelfarrResult{}, err
+	}
+	prompt := fmt.Sprintf("Pick the ONE candidate that is the actual literary work being requested. "+
+		"Reject study guides, summaries, lesson plans, academic analyses, box sets, and other volumes in the same series. "+
+		"Requested: title=%q author=%q. Candidates: %s. "+
+		`Return ONLY JSON: {"index": <int>, "confidence": <0-1>, "reason": "<short>"}`,
+		input.Title, input.Creator, data)
+
+	ctx, cancel := context.WithTimeout(ctx, s.cfg.OllamaTimeout)
+	defer cancel()
+	ranks, err := s.chatRankings(ctx, prompt)
+	if err != nil {
+		return shelfarrResult{}, err
+	}
+	for _, rank := range ranks {
+		if rank.Index >= 0 && rank.Index < len(results) {
+			log.Printf("resolved %q to %q (%s)", input.Title, results[rank.Index].Title, rank.Reason)
+			return results[rank.Index], nil
+		}
+	}
+	return shelfarrResult{}, errors.New("model did not choose a candidate in range")
+}
+
+// pickShelfarrResult chooses which metadata match to file the request against.
+// Taking the first hit blindly is wrong: Shelfarr returns omnibus editions and
+// unrelated works alongside the real one, and a result may not exist in the
+// format being asked for. Prefer results available in the requested book type,
+// then Shelfarr's own confidence score.
+func pickShelfarrResult(results []shelfarrResult, bookType string) (shelfarrResult, error) {
+	var best shelfarrResult
+	found := false
+	bestDerivative := false
+	for _, result := range results {
+		if result.WorkID == "" || !result.supportsBookType(bookType) {
+			continue
+		}
+		// Shelfarr scores every row identically, so confidence alone cannot
+		// separate a novel from its study guide. Prefer any non-derivative
+		// match before falling back to score.
+		isDerivative := derivativeWork.MatchString(result.Title)
+		switch {
+		case !found:
+		case bestDerivative && !isDerivative:
+		case bestDerivative == isDerivative && result.Confidence > best.Confidence:
+		default:
+			continue
+		}
+		best, bestDerivative, found = result, isDerivative, true
+	}
+	if !found {
+		if len(results) == 0 {
+			return shelfarrResult{}, errors.New("Shelfarr metadata search found no matching work")
+		}
+		return shelfarrResult{}, fmt.Errorf("Shelfarr found %d works but none available as %s", len(results), bookType)
+	}
+	return best, nil
 }
 
 func (s *server) shelfarrSearch(ctx context.Context, input createRequest) (shelfarrSearchResponse, error) {
@@ -772,19 +984,11 @@ func (s *server) searx(ctx context.Context, query, kind string) ([]candidate, er
 	return out, nil
 }
 
-func (s *server) rank(ctx context.Context, req discoverRequest, candidates []candidate, recommendation bool) ([]candidate, error) {
-	if len(candidates) > 40 {
-		candidates = candidates[:40]
-	}
-	data, err := json.Marshal(promptCandidates(candidates))
-	if err != nil {
-		return nil, err
-	}
-	instruction := "Prefer exact title and creator, correct media type, and authoritative pages."
-	if recommendation {
-		instruction = "Recommend genuinely related titles or shows, using the seed title, creator, media type, and stated preferences; reject pages that are only search-engine noise."
-	}
-	prompt := fmt.Sprintf("You rank search candidates for a media discovery request. Return ONLY a JSON array of objects with fields index (integer), confidence (0-1), reason (short). Include one entry per candidate you judge relevant. %s Request: kind=%q title=%q creator=%q year=%q isbn=%q. Candidates: %s", instruction, req.Kind, req.Title, req.Creator, req.Year, req.ISBN, data)
+// chatRankings runs one JSON-mode chat completion and decodes the ranking
+// payload. Both the web-result ranker and the Shelfarr work resolver go
+// through here so model selection, the thinking opt-out, and the permissive
+// reply parsing stay in one place.
+func (s *server) chatRankings(ctx context.Context, prompt string) ([]rankEntry, error) {
 	model, thinking, err := s.selectModel(ctx)
 	if err != nil {
 		return nil, err
@@ -819,8 +1023,8 @@ func (s *server) rank(ctx context.Context, req discoverRequest, candidates []can
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("ollama ranked %d candidates with %s in %s", len(candidates), model, time.Since(started).Round(time.Millisecond))
 	defer resp.Body.Close()
+	log.Printf("ollama replied with %s in %s", model, time.Since(started).Round(time.Millisecond))
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("ollama returned %s", resp.Status)
 	}
@@ -828,7 +1032,23 @@ func (s *server) rank(ctx context.Context, req discoverRequest, candidates []can
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&decoded); err != nil {
 		return nil, err
 	}
-	ranks, err := parseRankings(decoded.Message.Content)
+	return parseRankings(decoded.Message.Content)
+}
+
+func (s *server) rank(ctx context.Context, req discoverRequest, candidates []candidate, recommendation bool) ([]candidate, error) {
+	if len(candidates) > 40 {
+		candidates = candidates[:40]
+	}
+	data, err := json.Marshal(promptCandidates(candidates))
+	if err != nil {
+		return nil, err
+	}
+	instruction := "Prefer exact title and creator, correct media type, and authoritative pages."
+	if recommendation {
+		instruction = "Recommend genuinely related titles or shows, using the seed title, creator, media type, and stated preferences; reject pages that are only search-engine noise."
+	}
+	prompt := fmt.Sprintf("You rank search candidates for a media discovery request. Return ONLY a JSON array of objects with fields index (integer), confidence (0-1), reason (short). Include one entry per candidate you judge relevant. %s Request: kind=%q title=%q creator=%q year=%q isbn=%q. Candidates: %s", instruction, req.Kind, req.Title, req.Creator, req.Year, req.ISBN, data)
+	ranks, err := s.chatRankings(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}

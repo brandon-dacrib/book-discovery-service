@@ -1,9 +1,36 @@
 # Book Discovery Service
 
-An internal, read-only discovery API for books, audiobooks, movies, and TV.
-It fans out query variants to SearXNG, deduplicates candidates, and asks
-Ollama to rank them by title, creator, year, ISBN, and media type. It does not
-download files or automatically select an acquisition.
+Resolves a book or audiobook to the **correct** Shelfarr work, and provides a
+web-search discovery API alongside it. It does not download files.
+
+## Why this exists
+
+Shelfarr's metadata search returns the real book alongside study guides,
+lesson plans, academic theses, box sets, and other volumes in the same series —
+and reports the **same confidence score for every row**, so neither its
+ordering nor its score can separate them. Requesting the first result therefore
+files the wrong work a large fraction of the time.
+
+Measured against eight ambiguous titles on a live instance:
+
+| selection strategy | correct |
+| --- | --- |
+| Shelfarr's first result | 4/8 |
+| deterministic filter on derivative titles | 6/8 |
+| **local model reranking Shelfarr's own results** | **8/8** |
+
+The failures were not obscure: *Kafka on the Shore* resolved to a Gale Cengage
+study guide, *The Sandman* to a BookRags lesson plan, *Leviathan Wakes* to a
+box set, and *Dungeon Crawler Carl* to book 8 of the series. In every case the
+correct work was present in the results, just not first.
+
+`POST /v1/resolve` performs that selection and returns a `work_id`, so the
+result is actionable rather than advisory. `POST /v1/requests` uses the same
+path before filing.
+
+The service also fans out query variants to SearXNG and ranks the resulting
+pages (`/v1/discover`, `/v1/recommendations`). That path returns URLs rather
+than identifiers, so treat it as a research aid, not an acquisition source.
 
 ## Configuration
 
@@ -91,6 +118,29 @@ curl -X POST http://localhost:8080/v1/recommendations \
   -H 'content-type: application/json' \
   -d '{"kind":"book","title":"The Expanse","creator":"James S. A. Corey","preferences":"space opera, political science fiction"}'
 ```
+
+## Resolving a work
+
+`POST /v1/resolve` looks the title up in Shelfarr, picks the work that is
+actually being asked for, and returns its `work_id` without filing anything.
+Use it to preview what a request would target.
+
+```sh
+curl -X POST http://localhost:8080/v1/resolve \
+  -H 'content-type: application/json' \
+  -H "authorization: Bearer $SERVICE_API_TOKEN" \
+  -d '{"kind":"audiobook","title":"Kafka on the Shore","creator":"Haruki Murakami"}'
+```
+
+```json
+{"work_id":"hardcover:207877","title":"Kafka on the Shore","author":"Haruki Murakami",
+ "year":"2001","book_type":"audiobook","candidates":8}
+```
+
+Only works Shelfarr lists in the requested format are eligible, so an audiobook
+request is never filed against an ebook-only edition. The model chooses among
+those candidates by index and cannot invent a work; if it is unreachable, the
+deterministic filter still removes the most common derivative editions.
 
 ## Creating a Shelfarr request
 

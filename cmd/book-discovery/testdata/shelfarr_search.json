@@ -1,0 +1,80 @@
+{
+  "results": [
+    {
+      "canonical_key": "hardcover:427578",
+      "work_id": "hardcover:427578",
+      "source": "hardcover",
+      "source_id": "427578",
+      "source_name": "Hardcover",
+      "source_url": "https://hardcover.app/id/book/427578",
+      "source_attribution": "Metadata from Hardcover",
+      "sources": [
+        {
+          "source": "hardcover",
+          "source_id": "427578",
+          "source_name": "Hardcover",
+          "source_url": "https://hardcover.app/id/book/427578",
+          "work_id": "hardcover:427578"
+        }
+      ],
+      "editions": [],
+      "confidence": 70,
+      "title": "Project Hail Mary",
+      "author": "Andy Weir",
+      "year": 2021,
+      "cover_url": "https://assets.hardcover.app/editions/3274049/8741341047797682-91mYu67RfUL._SL1500_.jpg",
+      "has_audiobook": true,
+      "has_ebook": true,
+      "series_name": null,
+      "series_position": null,
+      "content_kind": "book",
+      "available_book_types": [
+        "audiobook",
+        "ebook"
+      ],
+      "collection_source": null,
+      "collection_id": null,
+      "collection_title": null,
+      "issue_number": null,
+      "release_date": null
+    },
+    {
+      "canonical_key": "hardcover:687862",
+      "work_id": "hardcover:687862",
+      "source": "hardcover",
+      "source_id": "687862",
+      "source_name": "Hardcover",
+      "source_url": "https://hardcover.app/id/book/687862",
+      "source_attribution": "Metadata from Hardcover",
+      "sources": [
+        {
+          "source": "hardcover",
+          "source_id": "687862",
+          "source_name": "Hardcover",
+          "source_url": "https://hardcover.app/id/book/687862",
+          "work_id": "hardcover:687862"
+        }
+      ],
+      "editions": [],
+      "confidence": 70,
+      "title": "SUMMARY AND ANALYSIS OF PROJECT HAIL MARY BY ANDY WEIR",
+      "author": "Good Reads Publishing",
+      "year": 2021,
+      "cover_url": "https://assets.hardcover.app/edition/30675159/c160c98b-7966-4ac8-b7eb-5ae142faa028.jpg",
+      "has_audiobook": false,
+      "has_ebook": false,
+      "series_name": null,
+      "series_position": null,
+      "content_kind": "book",
+      "available_book_types": [
+        "audiobook",
+        "ebook"
+      ],
+      "collection_source": null,
+      "collection_id": null,
+      "collection_title": null,
+      "issue_number": null,
+      "release_date": null
+    }
+  ]
+}
