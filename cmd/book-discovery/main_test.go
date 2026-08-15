@@ -905,3 +905,71 @@ func TestFilterTitleMatchesPrefersUnadornedEdition(t *testing.T) {
 		t.Fatal("explicit request for the adaptation found nothing")
 	}
 }
+
+// TestResolveWorkRefusesUnrelatedResults covers Hardcover's fuzzy matching: a
+// query for a book that does not exist still returns real books, and filing
+// one of those is worse than any refusal.
+func TestResolveWorkRefusesUnrelatedResults(t *testing.T) {
+	s := &server{cfg: config{}}
+	results := []shelfarrResult{
+		{WorkID: "w1", Title: "Back in Time with Thomas Edison", Author: "Dan Gutman", AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w2", Title: "ZZZ", Author: "Megan Hart", AvailableBookTypes: []string{"audiobook"}},
+	}
+	if got, err := s.resolveWork(context.Background(),
+		createRequest{Title: "Qwertyuiop Asdfghjkl", Creator: "Zxcvbnm Qwerty"}, results, "audiobook"); err == nil {
+		t.Fatalf("resolved nonsense to %q, want a refusal", got.Title)
+	}
+}
+
+// TestResolveWorkRefusesAmbiguousAuthor covers a title held by several real
+// authors, none of them the one requested.
+func TestResolveWorkRefusesAmbiguousAuthor(t *testing.T) {
+	s := &server{cfg: config{}}
+	results := []shelfarrResult{
+		{WorkID: "w1", Title: "Circe", Author: "Madeline Miller", AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "w2", Title: "Circe", Author: "Jessica Penot", AvailableBookTypes: []string{"audiobook"}},
+	}
+	if got, err := s.resolveWork(context.Background(),
+		createRequest{Title: "Circe", Creator: "Stephen King"}, results, "audiobook"); err == nil {
+		t.Fatalf("resolved ambiguous title to %q, want a refusal", got.WorkID)
+	}
+	// The requested author present resolves normally.
+	best, err := s.resolveWork(context.Background(),
+		createRequest{Title: "Circe", Creator: "Madeline Miller"}, results, "audiobook")
+	if err != nil || best.WorkID != "w1" {
+		t.Fatalf("got %+v err=%v, want Miller's Circe", best, err)
+	}
+	// A single match with a misremembered author is treated as a typo.
+	single := results[:1]
+	if _, err := s.resolveWork(context.Background(),
+		createRequest{Title: "Circe", Creator: "Stephen King"}, single, "audiobook"); err != nil {
+		t.Fatalf("unambiguous title should resolve despite the wrong author: %v", err)
+	}
+}
+
+// TestFilterTitleMatchesTiersSeriesPrefixes covers both colon conventions: a
+// series prefixed onto the work ("Mistborn: The Final Empire") must satisfy a
+// request for the work, while a series suffixed after it ("Chapterhouse:
+// Dune") must never satisfy a request for "Dune".
+func TestFilterTitleMatchesTiersSeriesPrefixes(t *testing.T) {
+	mistborn := []shelfarrResult{
+		{WorkID: "w-trilogy", Title: "Mistborn Trilogy", Author: "Brandon Sanderson"},
+		{WorkID: "w-book1", Title: "Mistborn: The Final Empire", Author: "Brandon Sanderson"},
+		// A different author really does publish a book by this exact title;
+		// it must not hide the requested one.
+		{WorkID: "w-other", Title: "The Final Empire", Author: "Someone Else"},
+	}
+	got := filterTitleMatches(mistborn, createRequest{Title: "The Final Empire", Creator: "Brandon Sanderson"})
+	if len(got) != 1 || got[0].WorkID != "w-book1" {
+		t.Fatalf("kept %+v, want the series-prefixed work", got)
+	}
+
+	dune := []shelfarrResult{
+		{WorkID: "w-dune", Title: "Dune", Author: "Frank Herbert"},
+		{WorkID: "w-chapter", Title: "Chapterhouse: Dune", Author: "Frank Herbert"},
+	}
+	got = filterTitleMatches(dune, createRequest{Title: "Dune", Creator: "Frank Herbert"})
+	if len(got) != 1 || got[0].WorkID != "w-dune" {
+		t.Fatalf("kept %+v, want only the exact title", got)
+	}
+}

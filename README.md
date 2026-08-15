@@ -20,6 +20,45 @@ self-published progression fantasy:
 | Shelfarr's first result | 20/75 |
 | **this service** | **75/75** |
 
+Validated on further sets, all with no model configured:
+
+| suite | result |
+| --- | --- |
+| held-out set, 49 books scored as both ebook and audiobook | 98/98 |
+| messy input, live — subtitles, series prefixes, typos, missing punctuation | 12/12 |
+| adversarial, live — invented titles and wrong authors | 6/6 |
+
+The held-out titles share nothing with the set used for tuning, and format
+filtering behaves identically for ebooks and audiobooks.
+
+## Refusing is a feature
+
+Hardcover fuzzy-matches, so a query for a book that does not exist still comes
+back full of real ones: `Qwertyuiop Asdfghjkl` returned *Back in Time with
+Thomas Edison*. Filing that would acquire a random book, so resolution requires
+an actual title match and otherwise fails with `422`.
+
+A wrong author is treated as a misremembered one when the title is unique —
+`Project Hail Mary` by "Frank Herbert" still resolves to Andy Weir's book — but
+refuses when several real works share the title, because guessing between them
+is how the wrong book gets acquired.
+
+## On additional metadata sources
+
+Resolution is only as good as the catalogue behind it, so a second source was
+investigated. Shelfarr's `/api/v1/search` returns `hardcover` results
+exclusively, including for queries Hardcover answers poorly and for nonsense
+queries, so a Google Books key configured in Shelfarr does not reach this
+endpoint. Google Books' own API refuses keyless traffic once the shared
+anonymous quota is spent, and Open Library — which is keyless and does work —
+disagrees with Hardcover on publication years often enough to be unsafe as a
+matching signal.
+
+None of that is a blocker today: a request needs a Shelfarr `work_id`, which
+only Shelfarr can mint, and the deterministic matcher already resolves every
+title in the suites above. A second source would help only where the catalogue
+lacks the work entirely, which it cannot fix either.
+
 ## No language model is required
 
 Resolution was benchmarked with and without one, replaying an identical cached

@@ -720,16 +720,25 @@ func (s *server) resolveWork(ctx context.Context, input createRequest, results [
 	// the Swan"), workbooks, and other volumes in a series all carry a
 	// different title — leaving the model to do the part it is good at:
 	// telling genuine editions of the same work apart.
-	if titled := filterTitleMatches(eligible, input); len(titled) > 0 {
-		eligible = titled
-	} else if allDerivative(eligible) {
-		// Every match is a study guide, adaptation, or piece of merchandise,
-		// which means the catalogue does not carry the work itself. Filing the
-		// closest thing would acquire the wrong book, so refuse instead. This
-		// is what a request for "The Eye of the World" hits: the catalogue
-		// returns only numbered comic issues.
-		return shelfarrResult{}, fmt.Errorf("Shelfarr returned only derivative editions for %q (study guides, adaptations, or merchandise); the work itself does not appear in its catalogue", input.Title)
+	titled := filterTitleMatches(eligible, input)
+	if len(titled) == 0 {
+		// Hardcover fuzzy-matches, so a query for a book that does not exist
+		// still comes back full of real ones: "Qwertyuiop Asdfghjkl" returned
+		// "Back in Time with Thomas Edison". Falling back to the best of those
+		// files a random book, which for an acquisition pipeline is worse than
+		// any refusal, so a title match is required.
+		if allDerivative(eligible) {
+			return shelfarrResult{}, fmt.Errorf("Shelfarr returned only derivative editions for %q (study guides, adaptations, or merchandise); the work itself does not appear in its catalogue", input.Title)
+		}
+		return shelfarrResult{}, fmt.Errorf("no candidate matches the title %q; Shelfarr returned %d unrelated results", input.Title, len(eligible))
 	}
+	// A title shared by several authors, none of them the one asked for, is
+	// ambiguous rather than a typo: resolving it would guess between real but
+	// different books. A single match is treated as a misremembered author.
+	if input.Creator != "" && !anyAuthorMatches(titled, input.Creator) && distinctAuthors(titled) > 1 {
+		return shelfarrResult{}, fmt.Errorf("%q matches %d works by different authors and none is credited to %q", input.Title, distinctAuthors(titled), input.Creator)
+	}
+	eligible = titled
 	if len(eligible) == 1 || s.cfg.OllamaURL == "" {
 		return pickShelfarrResult(eligible, bookType)
 	}
@@ -915,6 +924,28 @@ func hasTitleMatch(results []shelfarrResult, title string) bool {
 	return false
 }
 
+// anyAuthorMatches reports whether some candidate is credited to the requested
+// author.
+func anyAuthorMatches(results []shelfarrResult, creator string) bool {
+	for _, result := range results {
+		if result.Author != "" && authorMatches(result.Author, creator) {
+			return true
+		}
+	}
+	return false
+}
+
+// distinctAuthors counts the different credited authors, ignoring blanks.
+func distinctAuthors(results []shelfarrResult) int {
+	seen := map[string]bool{}
+	for _, result := range results {
+		if name := normalizeTitle(result.Author); name != "" {
+			seen[name] = true
+		}
+	}
+	return len(seen)
+}
+
 // allDerivative reports whether every candidate is something other than the
 // work itself.
 func allDerivative(results []shelfarrResult) bool {
@@ -937,6 +968,12 @@ func filterTitleMatches(results []shelfarrResult, input createRequest) []shelfar
 	wantLatin := !hasNonLatinScript(input.Title)
 	want := normalizeTitle(input.Title)
 	out := make([]shelfarrResult, 0, len(results))
+	// Matches on the part after a candidate's colon are held back as a second
+	// tier. A catalogue may prefix the series ("Mistborn: The Final Empire"
+	// for a request of "The Final Empire") or suffix it ("Chapterhouse: Dune",
+	// which must never satisfy a request for "Dune"). Preferring first-tier
+	// matches resolves the first case without opening the second.
+	suffix := make([]shelfarrResult, 0, len(results))
 	for _, result := range results {
 		// A candidate titled exactly as asked is what the caller wants, even if
 		// it trips the derivative pattern — someone requesting "The Journal of
@@ -950,9 +987,21 @@ func filterTitleMatches(results []shelfarrResult, input createRequest) []shelfar
 		if wantLatin && hasNonLatinScript(result.Title) {
 			continue
 		}
-		if titleMatches(result, input.Title, input.Creator) {
+		switch {
+		case titleMatches(result, input.Title, input.Creator):
 			out = append(out, result)
+		case titleMatchesAfterColon(result, input.Title):
+			suffix = append(suffix, result)
 		}
+	}
+	// The author outranks the tier. Other authors publish books called "The
+	// Final Empire", so a first-tier match on that title alone would hide
+	// Sanderson's, which the catalogue files under "Mistborn: The Final
+	// Empire" and which only matches in the second tier.
+	if input.Creator != "" && !anyAuthorMatches(out, input.Creator) && anyAuthorMatches(suffix, input.Creator) {
+		out = suffix
+	} else if len(out) == 0 {
+		out = suffix
 	}
 	// When the requested author is known and some candidate is credited to
 	// them, drop the rest. Catalogues list merchandise and knock-offs under
@@ -1081,6 +1130,23 @@ func titleVariants(title string) []string {
 		}
 	}
 	return variants
+}
+
+// titleMatchesAfterColon compares the request against the part of a candidate
+// title that follows a colon, which is where a series-prefixed catalogue puts
+// the actual work.
+func titleMatchesAfterColon(result shelfarrResult, title string) bool {
+	_, after, found := strings.Cut(result.Title, ":")
+	if !found || strings.TrimSpace(after) == "" {
+		return false
+	}
+	wantAfter := normalizeTitle(after)
+	for _, variant := range titleVariants(title) {
+		if want := normalizeTitle(variant); want != "" && want == wantAfter {
+			return true
+		}
+	}
+	return false
 }
 
 func titleMatchesExact(result shelfarrResult, title, creator string) bool {
