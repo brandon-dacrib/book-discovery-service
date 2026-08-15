@@ -13,15 +13,63 @@ stored in the repository.
 ```text
 SEARXNG_URL=https://search.example.invalid
 OLLAMA_URL=http://ollama:11434
-# Optional. If omitted, /api/ps is checked first, then /api/tags.
+# Optional. If omitted, a model is chosen automatically; see Model selection.
 OLLAMA_MODEL=
+# Include any sub-path your Shelfarr is mounted under. Rails deployments that
+# set RAILS_RELATIVE_URL_ROOT serve the API below that prefix, so the value
+# must be e.g. http://shelfarr:5056/requests, not just http://shelfarr:5056.
 SHELFARR_URL=http://shelfarr:5056
 SHELFARR_API_TOKEN=...
 # Optional protection for this service's write endpoint.
 SERVICE_API_TOKEN=...
 STATE_PATH=/data/discovery-state.json
 LISTEN_ADDR=:8080
+# Budget for the SearXNG fan-out (Go duration).
+REQUEST_TIMEOUT=45s
+# Budget for one Ollama ranking call. A cold model load can take minutes, so
+# this is deliberately generous.
+OLLAMA_TIMEOUT=10m
 ```
+
+SearXNG must have `json` in `search.formats`; it is not enabled by default.
+
+## Model selection
+
+When `OLLAMA_MODEL` is unset the service picks one itself:
+
+1. `/api/ps` is consulted first, because a model already resident answers far
+   faster than one that has to be paged in from disk.
+2. `/api/tags` is the fallback when nothing loaded is suitable.
+3. Within either list it prefers the **largest** model, since this service backs
+   background work where ranking quality matters more than tokens per second.
+
+Models advertising the `thinking` capability are skipped. Their reasoning
+preamble is slow and tends to corrupt the JSON payload. Models whose names mark
+them as specialized (`coder`, `embed`, …) are skipped too, since judging whether
+a search result matches a title is not what they are trained for. Either can
+still be forced through `OLLAMA_MODEL`.
+
+Ranking replies are parsed permissively. Local models under `format: json`
+variously return a bare array, a single object, an array wrapped under some key,
+or JSON preceded by chat-harness tokens — all four are accepted. When a reply
+cannot be used at all, the service falls back to deterministic title/creator
+matching and says so in `ranked_by`.
+
+## Security notes
+
+- `/v1/requests` and `/v1/history` are gated by `SERVICE_API_TOKEN`, compared in
+  constant time. **If that variable is unset both endpoints are open**; the
+  service logs a warning at startup. `/v1/discover` and `/v1/recommendations`
+  are unauthenticated by design.
+- Persisted state is written through a temporary file at mode `0600` and
+  renamed into place, so history is not world-readable.
+- Search result text is fed to the model as ranking input. The model's replies
+  are only ever read as an index, a confidence, and a reason string, and the
+  index is bounds-checked against the candidate list, so a malicious page cannot
+  redirect a request. The `reason` string is model-authored: display it as
+  untrusted text.
+- The container's Go toolchain determines which standard library ships in the
+  binary. Re-run `govulncheck` after changing the base image.
 
 ## API
 
@@ -62,9 +110,25 @@ curl -X POST http://localhost:8080/v1/requests \
   -d '{"kind":"audiobook","title":"Cappadonna","creator":"Jahquel J.","notes":"Created from discovery"}'
 ```
 
+Shelfarr issues its own API key; generate one in its UI and pass it as
+`SHELFARR_API_TOKEN`. A wrong or missing key surfaces as `502` from this
+service with the upstream `401` in the message.
+
 Discovery, recommendation, and request intents are retained in the JSON state
 file named by `STATE_PATH` (up to 500 recent entries). `GET /v1/history` reads
 that history and uses `SERVICE_API_TOKEN` when configured.
+
+## Tests
+
+```sh
+go test ./...          # unit and handler tests, no network required
+go vet ./...
+```
+
+The Shelfarr tests run against a stub that mirrors the live contract: bearer
+auth, a `401` without it, and the API hanging off whatever base path
+`SHELFARR_URL` carries. The ranking-parser tests pin the reply shapes real
+local models produce.
 
 ## Run
 

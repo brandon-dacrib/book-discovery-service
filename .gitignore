@@ -1,3 +1,6 @@
 .env
 bin/
 dist/
+data/
+# Binary produced by `go build ./...` at the repo root.
+/book-discovery

@@ -3,21 +3,29 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
+
+// userAgent identifies this service to SearXNG so its bot filter and logs can
+// tell it apart from the default Go client string.
+const userAgent = "book-discovery-service/1.0 (+internal)"
 
 type config struct {
 	ListenAddr    string
@@ -29,6 +37,7 @@ type config struct {
 	ServiceToken  string
 	StatePath     string
 	Timeout       time.Duration
+	OllamaTimeout time.Duration
 }
 
 func env(key, fallback string) string {
@@ -48,8 +57,26 @@ func loadConfig() config {
 		ShelfarrToken: env("SHELFARR_API_TOKEN", ""),
 		ServiceToken:  env("SERVICE_API_TOKEN", ""),
 		StatePath:     env("STATE_PATH", "/data/discovery-state.json"),
-		Timeout:       45 * time.Second,
+		Timeout:       envDuration("REQUEST_TIMEOUT", 45*time.Second),
+		// Ranking runs against a local Ollama host that may need to page a large
+		// model in from disk first. A cold load costs far more than a warm one,
+		// and this service backs background/overnight work, so the budget is
+		// generous by default rather than tuned for interactive latency.
+		OllamaTimeout: envDuration("OLLAMA_TIMEOUT", 10*time.Minute),
 	}
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed <= 0 {
+		log.Printf("invalid %s=%q; using %s", key, raw, fallback)
+		return fallback
+	}
+	return parsed
 }
 
 type discoverRequest struct {
@@ -109,8 +136,66 @@ type ollamaResponse struct {
 }
 
 type ollamaModel struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
+	Name         string   `json:"name"`
+	Size         int64    `json:"size"`
+	Capabilities []string `json:"capabilities"`
+}
+
+// httpClient keeps callers safe when a server is constructed without one, as
+// tests and future embedders do.
+func (s *server) httpClient() *http.Client {
+	if s.client == nil {
+		return http.DefaultClient
+	}
+	return s.client
+}
+
+func (m ollamaModel) hasCapability(name string) bool {
+	for _, capability := range m.Capabilities {
+		if strings.EqualFold(capability, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// specializedModels are trained for a different job than judging whether a
+// search result matches a title, creator, and media type. They are skipped
+// during automatic selection but may still be named by OLLAMA_MODEL.
+var specializedModels = []string{"coder", "embed", "code-", "starcoder", "whisper"}
+
+// suitableForRanking rejects thinking models, whose reasoning preamble both
+// slows ranking down and corrupts the JSON payload.
+func (m ollamaModel) suitableForRanking() bool {
+	if m.Name == "" || m.hasCapability("thinking") {
+		return false
+	}
+	if len(m.Capabilities) > 0 && !m.hasCapability("completion") {
+		return false
+	}
+	name := strings.ToLower(m.Name)
+	for _, marker := range specializedModels {
+		if strings.Contains(name, marker) {
+			return false
+		}
+	}
+	return true
+}
+
+// bestModel prefers the largest suitable model, since this service backs
+// background work where answer quality matters more than tokens per second.
+func bestModel(models []ollamaModel) (ollamaModel, bool) {
+	var selected ollamaModel
+	found := false
+	for _, model := range models {
+		if !model.suitableForRanking() {
+			continue
+		}
+		if !found || model.Size > selected.Size || (model.Size == selected.Size && model.Name < selected.Name) {
+			selected, found = model, true
+		}
+	}
+	return selected, found
 }
 
 type ollamaModelsResponse struct {
@@ -151,9 +236,10 @@ type shelfarrSearchResponse struct {
 }
 
 type server struct {
-	cfg    config
-	client *http.Client
-	state  *stateStore
+	cfg          config
+	client       *http.Client
+	ollamaClient *http.Client
+	state        *stateStore
 }
 
 func main() {
@@ -161,11 +247,19 @@ func main() {
 	if cfg.SearxURL == "" || cfg.OllamaURL == "" {
 		log.Fatal("SEARXNG_URL and OLLAMA_URL are required")
 	}
-	s := &server{cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
+	s := &server{
+		cfg:          cfg,
+		client:       &http.Client{Timeout: cfg.Timeout},
+		ollamaClient: &http.Client{Timeout: cfg.OllamaTimeout},
+	}
 	var err error
 	s.state, err = openState(cfg.StatePath)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if cfg.ServiceToken == "" {
+		log.Print("WARNING: SERVICE_API_TOKEN is unset; /v1/requests and /v1/history are unauthenticated. " +
+			"Set it, or keep this service on a trusted network only.")
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
@@ -174,8 +268,31 @@ func main() {
 	mux.HandleFunc("POST /v1/discover", s.discover)
 	mux.HandleFunc("POST /v1/recommendations", s.recommendations)
 	mux.HandleFunc("POST /v1/requests", s.createShelfarrRequest)
+
+	// Ranking can legitimately hold a connection open for minutes, so the write
+	// budget tracks the Ollama budget instead of a short fixed value. The read
+	// header timeout stays small to close off slow-header attacks.
+	httpServer := &http.Server{
+		Addr:              cfg.ListenAddr,
+		Handler:           securityHeaders(mux),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      cfg.Timeout + cfg.OllamaTimeout + time.Minute,
+		IdleTimeout:       2 * time.Minute,
+	}
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-shutdown
+		log.Print("shutting down")
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(ctx)
+	}()
 	log.Printf("book-discovery listening on %s", cfg.ListenAddr)
-	log.Fatal(http.ListenAndServe(cfg.ListenAddr, securityHeaders(mux)))
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
 }
 
 func securityHeaders(next http.Handler) http.Handler {
@@ -342,7 +459,14 @@ func (s *server) authorized(r *http.Request) bool {
 	if s.cfg.ServiceToken == "" {
 		return true
 	}
-	return strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ") == s.cfg.ServiceToken
+	header := r.Header.Get("Authorization")
+	scheme, token, found := strings.Cut(header, " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return false
+	}
+	// Constant time so a caller cannot recover the token byte by byte from
+	// response timing.
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(token)), []byte(s.cfg.ServiceToken)) == 1
 }
 
 func (s *server) shelfarrCreate(ctx context.Context, input createRequest) (map[string]any, error) {
@@ -446,7 +570,7 @@ func (s *server) shelfarrJSONInto(ctx context.Context, method, endpoint string, 
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := s.client.Do(req)
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		return err
 	}
@@ -471,14 +595,12 @@ func (s *server) discover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "title or query is required", http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout)
-	defer cancel()
-	results, err := s.search(ctx, req)
+	results, err := s.searchWithTimeout(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	ranked, rankingErr := s.rank(ctx, req, results, false)
+	ranked, rankingErr := s.rankWithTimeout(r.Context(), req, results, false)
 	if rankingErr != nil {
 		log.Printf("ollama ranking unavailable: %v", rankingErr)
 		ranked = fallbackRank(req, results)
@@ -497,20 +619,18 @@ func (s *server) recommendations(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "title is required", http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout)
-	defer cancel()
 	req := discoverRequest{
 		Kind:    input.Kind,
 		Title:   input.Title,
 		Creator: input.Creator,
 		Query:   strings.TrimSpace(strings.Join([]string{"similar", input.Title, input.Creator, input.Preferences, "recommendations"}, " ")),
 	}
-	results, err := s.search(ctx, req)
+	results, err := s.searchWithTimeout(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	ranked, rankingErr := s.rank(ctx, req, results, true)
+	ranked, rankingErr := s.rankWithTimeout(r.Context(), req, results, true)
 	if rankingErr != nil {
 		log.Printf("ollama recommendation ranking unavailable: %v", rankingErr)
 		ranked = fallbackRank(req, results)
@@ -539,26 +659,48 @@ func (s *server) record(intent string, request any, results []candidate, respons
 	}
 }
 
+// searchWithTimeout and rankWithTimeout budget each phase separately: search
+// should fail fast, while ranking may wait on a cold model load.
+func (s *server) searchWithTimeout(parent context.Context, req discoverRequest) ([]candidate, error) {
+	ctx, cancel := context.WithTimeout(parent, s.cfg.Timeout)
+	defer cancel()
+	return s.search(ctx, req)
+}
+
+func (s *server) rankWithTimeout(parent context.Context, req discoverRequest, candidates []candidate, recommendation bool) ([]candidate, error) {
+	ctx, cancel := context.WithTimeout(parent, s.cfg.OllamaTimeout)
+	defer cancel()
+	return s.rank(ctx, req, candidates, recommendation)
+}
+
 func (s *server) search(ctx context.Context, req discoverRequest) ([]candidate, error) {
 	queries := queryVariants(req)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	all := make([]candidate, 0)
+	failures := make([]error, 0, len(queries))
 	for _, query := range queries {
 		query := query
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			found, err := s.searx(ctx, query, req.Kind)
-			if err == nil {
-				mu.Lock()
-				all = append(all, found...)
-				mu.Unlock()
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				failures = append(failures, fmt.Errorf("query %q: %w", query, err))
+				return
 			}
+			all = append(all, found...)
 		}()
 	}
 	wg.Wait()
 	if len(all) == 0 {
+		// Report why the fan-out came back empty; a silent "no candidates" hides
+		// auth, TLS, and rate-limit failures that look identical from outside.
+		if len(failures) > 0 {
+			return nil, fmt.Errorf("searxng returned no candidates: %w", errors.Join(failures...))
+		}
 		return nil, errors.New("searxng returned no candidates")
 	}
 	return dedupe(all), nil
@@ -579,7 +721,12 @@ func queryVariants(req discoverRequest) []string {
 	case "tv", "show", "series":
 		suffix = " tv series"
 	}
-	queries := []string{base + suffix, fmt.Sprintf("%q %s", req.Title, req.Creator) + suffix}
+	queries := []string{base + suffix}
+	// Only add the phrase-match variant when there is a title to quote;
+	// otherwise a query-only request sends a bare `""` to SearXNG.
+	if strings.TrimSpace(req.Title) != "" {
+		queries = append(queries, strings.TrimSpace(fmt.Sprintf("%q %s", req.Title, req.Creator))+suffix)
+	}
 	if req.ISBN != "" {
 		queries = append(queries, req.ISBN)
 	}
@@ -587,20 +734,29 @@ func queryVariants(req discoverRequest) []string {
 }
 
 func (s *server) searx(ctx context.Context, query, kind string) ([]candidate, error) {
-	u, _ := url.Parse(s.cfg.SearxURL + "/search")
+	u, err := url.Parse(s.cfg.SearxURL + "/search")
+	if err != nil {
+		return nil, fmt.Errorf("parse SEARXNG_URL: %w", err)
+	}
 	q := u.Query()
 	q.Set("q", query)
 	q.Set("format", "json")
 	q.Set("safesearch", "0")
 	u.RawQuery = q.Encode()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	resp, err := s.client.Do(req)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("searxng returned %s", resp.Status)
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
+		return nil, fmt.Errorf("searxng returned %s: %s", resp.Status, strings.TrimSpace(string(message)))
 	}
 	var decoded searxResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&decoded); err != nil {
@@ -620,23 +776,50 @@ func (s *server) rank(ctx context.Context, req discoverRequest, candidates []can
 	if len(candidates) > 40 {
 		candidates = candidates[:40]
 	}
-	data, _ := json.Marshal(candidates)
+	data, err := json.Marshal(promptCandidates(candidates))
+	if err != nil {
+		return nil, err
+	}
 	instruction := "Prefer exact title and creator, correct media type, and authoritative pages."
 	if recommendation {
 		instruction = "Recommend genuinely related titles or shows, using the seed title, creator, media type, and stated preferences; reject pages that are only search-engine noise."
 	}
-	prompt := fmt.Sprintf("You rank search candidates for a media discovery request. Return ONLY a JSON array of objects with fields index (integer), confidence (0-1), reason (short). %s Request: kind=%q title=%q creator=%q year=%q isbn=%q. Candidates: %s", instruction, req.Kind, req.Title, req.Creator, req.Year, req.ISBN, data)
-	model, err := s.ollamaModel(ctx)
+	prompt := fmt.Sprintf("You rank search candidates for a media discovery request. Return ONLY a JSON array of objects with fields index (integer), confidence (0-1), reason (short). Include one entry per candidate you judge relevant. %s Request: kind=%q title=%q creator=%q year=%q isbn=%q. Candidates: %s", instruction, req.Kind, req.Title, req.Creator, req.Year, req.ISBN, data)
+	model, thinking, err := s.selectModel(ctx)
 	if err != nil {
 		return nil, err
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "stream": false, "format": "json", "messages": []map[string]string{{"role": "user", "content": prompt}}})
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OllamaURL+"/api/chat", bytes.NewReader(body))
+	payload := map[string]any{
+		"model":    model,
+		"stream":   false,
+		"format":   "json",
+		"messages": []map[string]string{{"role": "user", "content": prompt}},
+	}
+	if thinking {
+		// Only send `think` to models that advertise it; Ollama rejects the
+		// field outright on models that do not.
+		payload["think"] = false
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OllamaURL+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	resp, err := s.client.Do(httpReq)
+	httpReq.Header.Set("User-Agent", userAgent)
+	started := time.Now()
+	rankingClient := s.ollamaClient
+	if rankingClient == nil {
+		rankingClient = s.httpClient()
+	}
+	resp, err := rankingClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("ollama ranked %d candidates with %s in %s", len(candidates), model, time.Since(started).Round(time.Millisecond))
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("ollama returned %s", resp.Status)
@@ -645,12 +828,8 @@ func (s *server) rank(ctx context.Context, req discoverRequest, candidates []can
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&decoded); err != nil {
 		return nil, err
 	}
-	var ranks []struct {
-		Index      int     `json:"index"`
-		Confidence float64 `json:"confidence"`
-		Reason     string  `json:"reason"`
-	}
-	if err := json.Unmarshal([]byte(decoded.Message.Content), &ranks); err != nil {
+	ranks, err := parseRankings(decoded.Message.Content)
+	if err != nil {
 		return nil, err
 	}
 	out := make([]candidate, 0, len(ranks))
@@ -670,34 +849,147 @@ func (s *server) rank(ctx context.Context, req discoverRequest, candidates []can
 	return out, nil
 }
 
-func (s *server) ollamaModel(ctx context.Context) (string, error) {
-	if s.cfg.OllamaModel != "" {
-		return s.cfg.OllamaModel, nil
+type rankEntry struct {
+	Index      int     `json:"index"`
+	Confidence float64 `json:"confidence"`
+	Reason     string  `json:"reason"`
+}
+
+// parseRankings tolerates the shapes local models actually emit under
+// `format: json`, all of which were observed against this cluster's Ollama:
+//   - a bare array, which is what the prompt asks for
+//   - a single object, when the model ranks only one candidate (qwen3)
+//   - an object wrapping the array under some key (gemma: "ranked_candidates")
+//   - any of the above preceded by chat-harness tokens (muse-glimmer emits
+//     " to=user<|message|>[...]")
+//
+// Rejecting these outright is what silently forced every request onto the
+// deterministic fallback, so decoding stays permissive here.
+func parseRankings(content string) ([]rankEntry, error) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil, errors.New("ollama returned an empty ranking payload")
 	}
+	if ranks, ok := decodeRankings([]byte(content)); ok {
+		return ranks, nil
+	}
+	// Strip any preamble by retrying from the first plausible JSON delimiter.
+	if start := strings.IndexAny(content, "[{"); start > 0 {
+		if ranks, ok := decodeRankings([]byte(content[start:])); ok {
+			return ranks, nil
+		}
+	}
+	return nil, fmt.Errorf("ollama ranking was not usable JSON: %.200s", content)
+}
+
+func decodeRankings(data []byte) ([]rankEntry, bool) {
+	// json.Decoder stops at the end of the first value, so trailing harness
+	// tokens after a complete array or object do not break decoding.
+	var ranks []rankEntry
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&ranks); err == nil && len(ranks) > 0 {
+		return ranks, true
+	}
+	var single rankEntry
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&single); err == nil && single.Confidence > 0 {
+		return []rankEntry{single}, true
+	}
+	var wrapper map[string]json.RawMessage
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&wrapper); err != nil {
+		return nil, false
+	}
+	// Unwrap deterministically; map iteration order would otherwise make the
+	// choice of key random when a model emits more than one array.
+	keys := make([]string, 0, len(wrapper))
+	for key := range wrapper {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		var nested []rankEntry
+		if err := json.Unmarshal(wrapper[key], &nested); err == nil && len(nested) > 0 {
+			return nested, true
+		}
+	}
+	return nil, false
+}
+
+// selectModel resolves the ranking model and reports whether it advertises the
+// thinking capability, which decides if `think: false` is safe to send.
+func (s *server) selectModel(ctx context.Context) (string, bool, error) {
+	if s.cfg.OllamaModel != "" {
+		return s.cfg.OllamaModel, s.advertisesThinking(ctx, s.cfg.OllamaModel), nil
+	}
+	// /api/ps first: a model already resident answers far faster than one that
+	// has to be paged in, so a warm suitable model beats a larger cold one.
+	var fallback ollamaModel
 	for _, endpoint := range []string{"/api/ps", "/api/tags"} {
 		var models ollamaModelsResponse
 		if err := s.ollamaJSON(ctx, endpoint, &models); err != nil || len(models.Models) == 0 {
 			continue
 		}
-		selected := models.Models[0]
-		for _, model := range models.Models[1:] {
-			if model.Size > selected.Size || (model.Size == selected.Size && model.Name < selected.Name) {
-				selected = model
+		if selected, ok := bestModel(models.Models); ok {
+			return selected.Name, false, nil
+		}
+		if fallback.Name == "" {
+			for _, model := range models.Models {
+				if model.Name != "" && model.Size > fallback.Size {
+					fallback = model
+				}
 			}
 		}
-		if selected.Name != "" {
-			return selected.Name, nil
+	}
+	if fallback.Name != "" {
+		// Every model advertises thinking or is specialized; use the largest and
+		// let parseRankings cope with the messier payload.
+		log.Printf("no ideal ranking model available; falling back to %s", fallback.Name)
+		return fallback.Name, fallback.hasCapability("thinking"), nil
+	}
+	return "", false, errors.New("Ollama has no available models; set OLLAMA_MODEL or load a model")
+}
+
+func (s *server) advertisesThinking(ctx context.Context, name string) bool {
+	var models ollamaModelsResponse
+	if err := s.ollamaJSON(ctx, "/api/tags", &models); err != nil {
+		return false
+	}
+	for _, model := range models.Models {
+		if model.Name == name {
+			return model.hasCapability("thinking")
 		}
 	}
-	return "", errors.New("Ollama has no available models; set OLLAMA_MODEL or load a model")
+	return false
+}
+
+// promptCandidates trims each candidate to the fields the ranker actually
+// needs and caps the snippet length, keeping the prompt small enough that a
+// large local model is not paying to re-read search-engine boilerplate.
+func promptCandidates(candidates []candidate) []map[string]any {
+	out := make([]map[string]any, 0, len(candidates))
+	for i, item := range candidates {
+		content := item.Content
+		if len(content) > 300 {
+			content = content[:300]
+		}
+		out = append(out, map[string]any{
+			"index":   i,
+			"title":   item.Title,
+			"url":     item.URL,
+			"content": content,
+		})
+	}
+	return out
 }
 
 func (s *server) ollamaJSON(ctx context.Context, endpoint string, output any) error {
+	if s.cfg.OllamaURL == "" {
+		return errors.New("OLLAMA_URL is not configured")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.OllamaURL+endpoint, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := s.client.Do(req)
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		return err
 	}
@@ -758,7 +1050,10 @@ func clamp(v float64) float64 {
 	return v
 }
 func decodeJSON(r *http.Request, dst any) error {
-	if r.Header.Get("Content-Type") != "application/json" {
+	// Compare the parsed media type so charset and boundary parameters, which
+	// ordinary HTTP clients append, do not get rejected.
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
 		return errors.New("Content-Type must be application/json")
 	}
 	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))

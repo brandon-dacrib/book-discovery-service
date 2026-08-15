@@ -10,6 +10,10 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:?set OLLAMA_URL}
       # Leave empty to choose a loaded/available model automatically.
       OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-45s}
+      # Cold model loads are slow; this service backs background work.
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-10m}
+      # Include the sub-path if Shelfarr sets RAILS_RELATIVE_URL_ROOT.
       SHELFARR_URL: ${SHELFARR_URL:-}
       SHELFARR_API_TOKEN: ${SHELFARR_API_TOKEN:-}
       SERVICE_API_TOKEN: ${SERVICE_API_TOKEN:-}
