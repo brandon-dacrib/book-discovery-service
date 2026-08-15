@@ -34,6 +34,15 @@ The response includes ranked candidate URLs and a confidence score. If Ollama
 is unavailable, the service returns deterministic title/creator text matching
 with `ranked_by: deterministic`.
 
+`POST /v1/recommendations` uses the same pipeline with a related-media intent,
+so it can support recommendation screens for books now and movies/TV later:
+
+```sh
+curl -X POST http://localhost:8080/v1/recommendations \
+  -H 'content-type: application/json' \
+  -d '{"kind":"book","title":"The Expanse","creator":"James S. A. Corey","preferences":"space opera, political science fiction"}'
+```
+
 ## Creating a Shelfarr request
 
 `POST /v1/requests` resolves a title through Shelfarr's metadata API when no

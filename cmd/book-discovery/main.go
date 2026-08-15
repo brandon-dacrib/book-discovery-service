@@ -68,6 +68,13 @@ type createRequest struct {
 	Notes    string `json:"notes,omitempty"`
 }
 
+type recommendationRequest struct {
+	Kind        string `json:"kind"`
+	Title       string `json:"title"`
+	Creator     string `json:"creator,omitempty"`
+	Preferences string `json:"preferences,omitempty"`
+}
+
 type candidate struct {
 	Title      string  `json:"title"`
 	URL        string  `json:"url"`
@@ -132,6 +139,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("POST /v1/discover", s.discover)
+	mux.HandleFunc("POST /v1/recommendations", s.recommendations)
 	mux.HandleFunc("POST /v1/requests", s.createShelfarrRequest)
 	log.Printf("book-discovery listening on %s", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, securityHeaders(mux)))
@@ -206,6 +214,9 @@ func (s *server) shelfarrCreate(ctx context.Context, input createRequest) (map[s
 		}
 		best := resolved.Results[0]
 		workID = best.WorkID
+		if workID == "" {
+			return nil, errors.New("Shelfarr metadata result did not include a work_id")
+		}
 		if best.Title != "" {
 			metadata["title"] = best.Title
 		}
@@ -313,12 +324,43 @@ func (s *server) discover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	ranked, rankingErr := s.rank(ctx, req, results)
+	ranked, rankingErr := s.rank(ctx, req, results, false)
 	if rankingErr != nil {
 		log.Printf("ollama ranking unavailable: %v", rankingErr)
 		ranked = fallbackRank(req, results)
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{"request": req, "results": ranked, "ranked_by": map[bool]string{true: "ollama", false: "deterministic"}[rankingErr == nil]})
+}
+
+func (s *server) recommendations(w http.ResponseWriter, r *http.Request) {
+	var input recommendationRequest
+	if err := decodeJSON(r, &input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(input.Title) == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout)
+	defer cancel()
+	req := discoverRequest{
+		Kind:    input.Kind,
+		Title:   input.Title,
+		Creator: input.Creator,
+		Query:   strings.TrimSpace(strings.Join([]string{"similar", input.Title, input.Creator, input.Preferences, "recommendations"}, " ")),
+	}
+	results, err := s.search(ctx, req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	ranked, rankingErr := s.rank(ctx, req, results, true)
+	if rankingErr != nil {
+		log.Printf("ollama recommendation ranking unavailable: %v", rankingErr)
+		ranked = fallbackRank(req, results)
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"request": input, "results": ranked, "ranked_by": map[bool]string{true: "ollama", false: "deterministic"}[rankingErr == nil]})
 }
 
 func (s *server) search(ctx context.Context, req discoverRequest) ([]candidate, error) {
@@ -398,12 +440,16 @@ func (s *server) searx(ctx context.Context, query, kind string) ([]candidate, er
 	return out, nil
 }
 
-func (s *server) rank(ctx context.Context, req discoverRequest, candidates []candidate) ([]candidate, error) {
+func (s *server) rank(ctx context.Context, req discoverRequest, candidates []candidate, recommendation bool) ([]candidate, error) {
 	if len(candidates) > 40 {
 		candidates = candidates[:40]
 	}
 	data, _ := json.Marshal(candidates)
-	prompt := fmt.Sprintf("You rank search candidates for a media discovery request. Return ONLY a JSON array of objects with fields index (integer), confidence (0-1), reason (short). Prefer exact title and creator, correct media type, and authoritative pages. Request: kind=%q title=%q creator=%q year=%q isbn=%q. Candidates: %s", req.Kind, req.Title, req.Creator, req.Year, req.ISBN, data)
+	instruction := "Prefer exact title and creator, correct media type, and authoritative pages."
+	if recommendation {
+		instruction = "Recommend genuinely related titles or shows, using the seed title, creator, media type, and stated preferences; reject pages that are only search-engine noise."
+	}
+	prompt := fmt.Sprintf("You rank search candidates for a media discovery request. Return ONLY a JSON array of objects with fields index (integer), confidence (0-1), reason (short). %s Request: kind=%q title=%q creator=%q year=%q isbn=%q. Candidates: %s", instruction, req.Kind, req.Title, req.Creator, req.Year, req.ISBN, data)
 	model, err := s.ollamaModel(ctx)
 	if err != nil {
 		return nil, err
