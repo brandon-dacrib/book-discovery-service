@@ -624,7 +624,10 @@ func TestNormalizeTitleIgnoresArticlesAndPunctuation(t *testing.T) {
 		{"The Joy of Cooking", "joy of cooking"},
 		{"Joy of Cooking", "joy of cooking"},
 		{"Salt, Fat, Acid, Heat", "salt fat acid heat"},
-		{"Ender's Game", "ender s game"},
+		{"Ender's Game", "enders game"},
+		{"Hitchhikers Guide", "hitchhikers guide"},
+		{"Dune (Dune Chronicles, Book 1)", "dune"},
+		{"Piranesi [Unabridged]", "piranesi"},
 	} {
 		if got := normalizeTitle(tc.in); got != tc.want {
 			t.Fatalf("normalizeTitle(%q) = %q, want %q", tc.in, got, tc.want)
@@ -862,5 +865,43 @@ func TestTitleVariantsSplitsOnColon(t *testing.T) {
 	}
 	if len(titleVariants("Piranesi")) != 1 {
 		t.Fatal("a title without a colon should yield one variant")
+	}
+}
+
+// TestTitleMatchesIgnoresStorefrontAnnotations covers a live failure: the
+// request "Dune (Dune Chronicles, Book 1)" resolved to "Heretics of Dune"
+// because the series words dominated both the query and the comparison.
+func TestTitleMatchesIgnoresStorefrontAnnotations(t *testing.T) {
+	dune := shelfarrResult{Title: "Dune", Author: "Frank Herbert"}
+	if !titleMatches(dune, "Dune (Dune Chronicles, Book 1)", "Frank Herbert") {
+		t.Fatal("parenthetical series annotation broke the match")
+	}
+	if titleMatches(shelfarrResult{Title: "Heretics of Dune", Author: "Frank Herbert"},
+		"Dune (Dune Chronicles, Book 1)", "Frank Herbert") {
+		t.Fatal("matched a different book in the series")
+	}
+	// Apostrophes must not split words, so editions printed without one match.
+	hitch := shelfarrResult{Title: "Hitchhikers Guide To The Galaxy", Author: "Douglas Adams"}
+	if !titleMatches(hitch, "The Hitchhiker's Guide to the Galaxy", "Douglas Adams") {
+		t.Fatal("apostrophe difference broke the match")
+	}
+}
+
+// TestFilterTitleMatchesPrefersUnadornedEdition covers the cost of ignoring
+// annotations while matching: adapted and gift editions become eligible, and
+// must not outrank the plain book.
+func TestFilterTitleMatchesPrefersUnadornedEdition(t *testing.T) {
+	results := []shelfarrResult{
+		{WorkID: "w-ya", Title: "Just Mercy (Adapted for Young Adults): A Story of Justice", Author: "Bryan Stevenson"},
+		{WorkID: "w-plain", Title: "Just Mercy: A Story of Justice and Redemption", Author: "Bryan Stevenson"},
+	}
+	got := filterTitleMatches(results, createRequest{Title: "Just Mercy", Creator: "Bryan Stevenson"})
+	if len(got) != 1 || got[0].WorkID != "w-plain" {
+		t.Fatalf("kept %+v, want the unadorned edition", got)
+	}
+	// Asking for the adaptation still reaches it.
+	got = filterTitleMatches(results, createRequest{Title: "Just Mercy (Adapted for Young Adults)", Creator: "Bryan Stevenson"})
+	if len(got) == 0 {
+		t.Fatal("explicit request for the adaptation found nothing")
 	}
 }

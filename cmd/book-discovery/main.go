@@ -838,19 +838,22 @@ func (s *server) shelfarrSearchWithRetry(ctx context.Context, input createReques
 	// adaptation returns nothing but numbered issues -- "The Eye of the World"
 	// yields 20 of them -- while adding a disambiguating noun surfaces the
 	// novel. Each query costs an upstream call, so they run only when needed.
+	// Storefront annotations are stripped before searching; "Dune (Dune
+	// Chronicles, Book 1)" otherwise searches for the series, not the book.
+	title := stripAnnotations(input.Title)
 	queries := []string{
-		strings.Join([]string{input.Title, input.Creator}, " "),
-		input.Title,
+		strings.Join([]string{title, input.Creator}, " "),
+		title,
 	}
 	// A request carrying a series prefix or a subtitle ("Cradle: Unsouled",
 	// "Sapiens: A Brief History of Humankind") often finds nothing as typed
 	// while either half finds the work.
-	for _, variant := range titleVariants(input.Title)[1:] {
+	for _, variant := range titleVariants(title)[1:] {
 		queries = append(queries, strings.Join([]string{variant, input.Creator}, " "))
 	}
 	queries = append(queries,
-		strings.Join([]string{input.Title, input.Creator, "novel"}, " "),
-		strings.Join([]string{input.Title, input.Creator, "book"}, " "))
+		strings.Join([]string{title, input.Creator, "novel"}, " "),
+		strings.Join([]string{title, input.Creator, "book"}, " "))
 	queries = uniqueNonEmpty(queries)
 	var merged shelfarrSearchResponse
 	seen := map[string]bool{}
@@ -976,7 +979,23 @@ func filterTitleMatches(results []shelfarrResult, input createRequest) []shelfar
 		}
 	}
 	if len(exact) > 0 {
-		return exact
+		out = exact
+	}
+	// Annotations are ignored when matching so that a request carrying one
+	// still finds the book, which also lets annotated editions through: a
+	// "(Gift Edition)" or one "(Adapted for Young Adults)" now compares equal
+	// to the plain edition. Prefer the unadorned title when both are present,
+	// unless the caller asked for the annotated one.
+	if !annotation.MatchString(input.Title) {
+		plain := make([]shelfarrResult, 0, len(out))
+		for _, result := range out {
+			if !annotation.MatchString(result.Title) {
+				plain = append(plain, result)
+			}
+		}
+		if len(plain) > 0 {
+			return plain
+		}
 	}
 	return out
 }
@@ -994,10 +1013,12 @@ func titleMatchesUnfolded(result shelfarrResult, title string) bool {
 // alone, so "Circe" and "Circé" stay distinguishable.
 func unfoldedKey(value string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(value) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+	for _, r := range strings.ToLower(stripAnnotations(value)) {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			b.WriteRune(r)
-		} else {
+		case r == '\'' || r == '\u2019':
+		default:
 			b.WriteRune(' ')
 		}
 	}
@@ -1049,6 +1070,7 @@ func titleMatches(result shelfarrResult, title, creator string) bool {
 // titleVariants returns the request title plus, when it carries a colon, each
 // side of it. Order is longest-first so the most specific form wins.
 func titleVariants(title string) []string {
+	title = stripAnnotations(title)
 	variants := []string{title}
 	if before, after, found := strings.Cut(title, ":"); found {
 		if strings.TrimSpace(before) != "" {
@@ -1097,6 +1119,17 @@ var accentFolds = strings.NewReplacer(
 	"æ", "ae", "œ", "oe", "ß", "ss", "đ", "d", "ð", "d", "þ", "th",
 )
 
+// annotation matches the parenthetical and bracketed asides that storefronts
+// append to a title: "Dune (Dune Chronicles, Book 1)", "Piranesi [Unabridged]".
+// Left in place they poison both the query and the comparison — that Dune
+// request resolved to "Heretics of Dune" because the series words dominated
+// the search.
+var annotation = regexp.MustCompile(`\s*[\(\[][^\)\]]*[\)\]]`)
+
+func stripAnnotations(value string) string {
+	return strings.TrimSpace(annotation.ReplaceAllString(value, ""))
+}
+
 // normalizeTitle lowercases, folds accents, drops punctuation, and removes a
 // leading article so "The Joy of Cooking" and "Joy of Cooking" compare equal.
 //
@@ -1104,12 +1137,17 @@ var accentFolds = strings.NewReplacer(
 // the Russian "Sapiens - история в картинки" normalise to bare "sapiens" and
 // compare equal to the English edition.
 func normalizeTitle(value string) string {
-	folded := accentFolds.Replace(strings.ToLower(value))
+	folded := accentFolds.Replace(strings.ToLower(stripAnnotations(value)))
 	var b strings.Builder
 	for _, r := range folded {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			b.WriteRune(r)
-		} else {
+		case r == '\'' || r == '’':
+			// Drop apostrophes rather than splitting on them, so editions
+			// printed without one still match: "Hitchhiker's Guide" against
+			// "Hitchhikers Guide".
+		default:
 			b.WriteRune(' ')
 		}
 	}
