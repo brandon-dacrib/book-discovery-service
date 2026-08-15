@@ -835,3 +835,32 @@ func TestShelfarrSearchEscalatesPastDerivatives(t *testing.T) {
 		t.Fatalf("resolved to %+v err=%v, want the novel", best, err)
 	}
 }
+
+// TestTitleMatchesHandlesRequestSideSubtitles covers the two ways people type a
+// title: with the subtitle attached, or with the series leading.
+func TestTitleMatchesHandlesRequestSideSubtitles(t *testing.T) {
+	sapiens := shelfarrResult{Title: "Sapiens", Author: "Yuval Noah Harari"}
+	if !titleMatches(sapiens, "Sapiens: A Brief History of Humankind", "Yuval Noah Harari") {
+		t.Fatal("request carrying a subtitle did not match the bare title")
+	}
+	unsouled := shelfarrResult{Title: "Unsouled", Author: "Will Wight"}
+	if !titleMatches(unsouled, "Cradle: Unsouled", "Will Wight") {
+		t.Fatal("series-prefixed request did not match the work")
+	}
+	// Still not a licence to match a different book in the series.
+	other := shelfarrResult{Title: "Soulsmith", Author: "Will Wight"}
+	if titleMatches(other, "Cradle: Unsouled", "Will Wight") {
+		t.Fatal("matched a different volume")
+	}
+}
+
+func TestTitleVariantsSplitsOnColon(t *testing.T) {
+	got := titleVariants("Cradle: Unsouled")
+	want := []string{"Cradle: Unsouled", "Cradle", " Unsouled"}
+	if len(got) != len(want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if len(titleVariants("Piranesi")) != 1 {
+		t.Fatal("a title without a colon should yield one variant")
+	}
+}

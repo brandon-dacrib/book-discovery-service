@@ -838,12 +838,20 @@ func (s *server) shelfarrSearchWithRetry(ctx context.Context, input createReques
 	// adaptation returns nothing but numbered issues -- "The Eye of the World"
 	// yields 20 of them -- while adding a disambiguating noun surfaces the
 	// novel. Each query costs an upstream call, so they run only when needed.
-	queries := uniqueNonEmpty([]string{
+	queries := []string{
 		strings.Join([]string{input.Title, input.Creator}, " "),
 		input.Title,
+	}
+	// A request carrying a series prefix or a subtitle ("Cradle: Unsouled",
+	// "Sapiens: A Brief History of Humankind") often finds nothing as typed
+	// while either half finds the work.
+	for _, variant := range titleVariants(input.Title)[1:] {
+		queries = append(queries, strings.Join([]string{variant, input.Creator}, " "))
+	}
+	queries = append(queries,
 		strings.Join([]string{input.Title, input.Creator, "novel"}, " "),
-		strings.Join([]string{input.Title, input.Creator, "book"}, " "),
-	})
+		strings.Join([]string{input.Title, input.Creator, "book"}, " "))
+	queries = uniqueNonEmpty(queries)
 	var merged shelfarrSearchResponse
 	seen := map[string]bool{}
 	var lastErr error
@@ -1024,7 +1032,36 @@ func authorMatches(candidate, requested string) bool {
 // titleMatches compares the request against the whole title, the part before a
 // subtitle, and — when a catalogue prefixes the author, as in
 // "Plato : The Republic" — the part after it.
+//
+// The request is split the same way as the candidate. People paste the whole
+// thing ("Sapiens: A Brief History of Humankind") or lead with the series
+// ("Cradle: Unsouled"), and a comparison that only ever split the catalogue
+// side would miss the work in both directions.
 func titleMatches(result shelfarrResult, title, creator string) bool {
+	for _, variant := range titleVariants(title) {
+		if titleMatchesExact(result, variant, creator) {
+			return true
+		}
+	}
+	return false
+}
+
+// titleVariants returns the request title plus, when it carries a colon, each
+// side of it. Order is longest-first so the most specific form wins.
+func titleVariants(title string) []string {
+	variants := []string{title}
+	if before, after, found := strings.Cut(title, ":"); found {
+		if strings.TrimSpace(before) != "" {
+			variants = append(variants, before)
+		}
+		if strings.TrimSpace(after) != "" {
+			variants = append(variants, after)
+		}
+	}
+	return variants
+}
+
+func titleMatchesExact(result shelfarrResult, title, creator string) bool {
 	want := normalizeTitle(title)
 	if want == "" {
 		return false
