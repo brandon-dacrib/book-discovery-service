@@ -43,4 +43,11 @@ func TestStateStorePersistsRecentEntries(t *testing.T) {
 	if len(entries) != 1 || entries[0].ID != "one" {
 		t.Fatalf("unexpected entries: %+v", entries)
 	}
+	if err := reloaded.append(historyEntry{ID: "two", Intent: "request", IdempotencyKey: "retry-me", Response: map[string]string{"id": "42"}}); err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := reloaded.findByIdempotencyKey("retry-me")
+	if !ok || entry.ID != "two" {
+		t.Fatalf("idempotency lookup failed: %+v %v", entry, ok)
+	}
 }

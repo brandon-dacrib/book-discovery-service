@@ -70,6 +70,7 @@ type createRequest struct {
 	WorkID   string `json:"work_id,omitempty"`
 	BookType string `json:"book_type,omitempty"`
 	Notes    string `json:"notes,omitempty"`
+	Target   string `json:"target,omitempty"`
 }
 
 type recommendationRequest struct {
@@ -117,12 +118,13 @@ type ollamaModelsResponse struct {
 }
 
 type historyEntry struct {
-	ID        string      `json:"id"`
-	Intent    string      `json:"intent"`
-	CreatedAt time.Time   `json:"created_at"`
-	Request   any         `json:"request"`
-	Results   []candidate `json:"results,omitempty"`
-	Response  any         `json:"response,omitempty"`
+	ID             string      `json:"id"`
+	Intent         string      `json:"intent"`
+	CreatedAt      time.Time   `json:"created_at"`
+	Request        any         `json:"request"`
+	Results        []candidate `json:"results,omitempty"`
+	Response       any         `json:"response,omitempty"`
+	IdempotencyKey string      `json:"idempotency_key,omitempty"`
 }
 
 type persistedState struct {
@@ -167,6 +169,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /v1/capabilities", s.capabilities)
 	mux.HandleFunc("GET /v1/history", s.history)
 	mux.HandleFunc("POST /v1/discover", s.discover)
 	mux.HandleFunc("POST /v1/recommendations", s.recommendations)
@@ -183,7 +186,23 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {
-	jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"status":              "ok",
+		"state":               s.cfg.StatePath,
+		"shelfarr_configured": s.cfg.ShelfarrURL != "" && s.cfg.ShelfarrToken != "",
+	})
+}
+
+func (s *server) capabilities(w http.ResponseWriter, _ *http.Request) {
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"media_kinds": []string{"book", "audiobook", "ebook", "movie", "tv"},
+		"operations":  []string{"discover", "recommend", "create_request", "history"},
+		"request_backends": []map[string]any{{
+			"id":          "shelfarr",
+			"media_kinds": []string{"book", "audiobook", "ebook"},
+			"configured":  s.cfg.ShelfarrURL != "" && s.cfg.ShelfarrToken != "",
+		}},
+	})
 }
 
 func openState(path string) (*stateStore, error) {
@@ -237,6 +256,17 @@ func (s *stateStore) append(entry historyEntry) error {
 	return os.Rename(temporaryName, s.path)
 }
 
+func (s *stateStore) findByIdempotencyKey(key string) (historyEntry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := len(s.entries) - 1; i >= 0; i-- {
+		if s.entries[i].Intent == "request" && s.entries[i].IdempotencyKey == key {
+			return s.entries[i], true
+		}
+	}
+	return historyEntry{}, false
+}
+
 func (s *stateStore) recent(limit int) []historyEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -286,6 +316,17 @@ func (s *server) createShelfarrRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "title is required", http.StatusBadRequest)
 		return
 	}
+	if input.Target != "" && !strings.EqualFold(input.Target, "shelfarr") {
+		http.Error(w, "unsupported request target", http.StatusBadRequest)
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey != "" && s.state != nil {
+		if previous, ok := s.state.findByIdempotencyKey(idempotencyKey); ok {
+			jsonResponse(w, http.StatusOK, previous.Response)
+			return
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.Timeout)
 	defer cancel()
 	created, err := s.shelfarrCreate(ctx, input)
@@ -293,7 +334,7 @@ func (s *server) createShelfarrRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	s.record("request", input, nil, created)
+	s.record("request", input, nil, created, idempotencyKey)
 	jsonResponse(w, http.StatusAccepted, created)
 }
 
@@ -478,7 +519,7 @@ func (s *server) recommendations(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]any{"request": input, "results": ranked, "ranked_by": map[bool]string{true: "ollama", false: "deterministic"}[rankingErr == nil]})
 }
 
-func (s *server) record(intent string, request any, results []candidate, response any) {
+func (s *server) record(intent string, request any, results []candidate, response any, idempotencyKey ...string) {
 	if s.state == nil {
 		return
 	}
@@ -489,6 +530,9 @@ func (s *server) record(intent string, request any, results []candidate, respons
 		Request:   request,
 		Results:   results,
 		Response:  response,
+	}
+	if len(idempotencyKey) > 0 {
+		entry.IdempotencyKey = idempotencyKey[0]
 	}
 	if err := s.state.append(entry); err != nil {
 		log.Printf("persist %s history: %v", intent, err)

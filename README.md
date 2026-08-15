@@ -49,6 +49,11 @@ curl -X POST http://localhost:8080/v1/recommendations \
 `POST /v1/requests` resolves a title through Shelfarr's metadata API when no
 `work_id` is supplied, then creates the request through Shelfarr's scoped API.
 It defaults to an audiobook unless `kind` is `ebook` or `book`.
+Send an `Idempotency-Key` header when a caller may retry a request; repeated
+keys return the recorded response instead of creating another request.
+
+`GET /v1/capabilities` describes supported media kinds, operations, and
+configured request backends for future *arr integrations.
 
 ```sh
 curl -X POST http://localhost:8080/v1/requests \
