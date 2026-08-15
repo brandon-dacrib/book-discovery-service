@@ -11,26 +11,42 @@ and reports the **same confidence score for every row**, so neither its
 ordering nor its score can separate them. Requesting the first result therefore
 files the wrong work a large fraction of the time.
 
-Measured on a live instance across 25 genres, from literary fiction and
-translated works to cookbooks, poetry, graphic novels, and self-published
-progression fantasy:
+Measured on a live instance over 75 titles across 25 genres, from literary
+fiction and translated works to cookbooks, poetry, graphic novels, and
+self-published progression fantasy:
 
 | selection strategy | correct |
 | --- | --- |
-| Shelfarr's first result | 15/50 |
-| **this service** | **50/50** |
+| Shelfarr's first result | 20/75 |
+| **this service** | **75/75** |
 
-A third set of 25 could not be scored cleanly: Shelfarr's upstream metadata
-provider rate limits, and returns HTTP 200 with an empty result set when it
-does, so a third of that run failed for reasons unrelated to selection. See
-the note on retries below.
+## No language model is required
+
+Resolution was benchmarked with and without one, replaying an identical cached
+candidate set through the real service so the arms differ only in the model:
+
+| ranking model | size | correct | wall clock |
+| --- | --- | --- | --- |
+| **none — deterministic only** | **0** | **75/75** | **~0s** |
+| qwen2.5:3b | 1.9 GB | 75/75 | 0.4 min |
+| gemma3:27b | 17.4 GB | 75/75 | 3.3 min |
+| qwen2.5:0.5b | 0.4 GB | 73/75 | 0.2 min |
+
+A model changes no outcome, and the smallest one is actively worse — it chose
+a Turkish edition of *Verity* that the deterministic path rejects. Embedding a
+model in the image was considered and **rejected on this evidence**: it would
+add 0.4–2 GB to a 7 MB image and buy nothing.
+
+`OLLAMA_URL` is therefore optional. Leave it unset for resolution. It still
+drives `/v1/discover` and `/v1/recommendations`, which rank open web results
+and do need judgement.
 
 The failures were not obscure. *Kafka on the Shore* resolved to a Gale Cengage
 study guide, *The Sandman* to a BookRags lesson plan, *Leviathan Wakes* to a
 box set, *Dungeon Crawler Carl* to book 8 of the series, and *Circe* to a blank
 notebook sold under the novel's name.
 
-Three things were wrong, and the order matters:
+What was wrong, in descending order of impact:
 
 1. **Recall, not ranking, was the binding constraint.** At Shelfarr's default
    result count neither *Dune* nor *Atomic Habits* appeared at all — summaries
@@ -40,12 +56,24 @@ Three things were wrong, and the order matters:
    returned three results and none was the book, while `Charlotte's Web`
    returned fifteen and did. A title-only retry runs when the first query comes
    back without anything titled like the request.
-3. **Most of the remaining work is deterministic.** Filtering to candidates
-   whose title and author actually match the request removes omnibus editions,
-   workbooks, merchandise, comic adaptations, and other volumes in a series by
-   construction. The model is only consulted for what is left. Across the 50
-   scored resolutions, **58% never called a model at all** — the filters left a
-   single candidate — and the rest took a few seconds each.
+3. **The work is deterministic.** Filtering to candidates whose title and
+   author actually match the request removes omnibus editions, workbooks,
+   merchandise, comic adaptations, translations, and other volumes in a series
+   by construction — which is why no model is needed.
+4. **Some titles are only reachable by asking differently.** A series with a
+   comic adaptation buries the novel: `The Eye of the World` and
+   `The Eye of the World Robert Jordan` return twenty numbered comic issues and
+   nothing else, while adding `novel` surfaces the book. That escalation runs
+   only when the earlier queries came back without the work.
+5. **Refuse rather than guess.** When every candidate is a study guide,
+   adaptation, or piece of merchandise, resolution fails instead of filing the
+   closest thing, because acquiring the wrong book is worse than acquiring
+   nothing. A candidate titled exactly as requested is exempt, so a real book
+   called *The Journal of Best Practices* still resolves.
+
+Two limits are the catalogue's, not this service's. It carries no English
+edition of *Circe*, only the French *Circé*, so that is what resolves; and
+where a work is absent entirely, no amount of ranking invents it.
 
 Shelfarr's upstream provider signals throttling as HTTP 200 with an empty
 result set, which is indistinguishable from "no such book". The service waits
@@ -67,7 +95,9 @@ stored in the repository.
 
 ```text
 SEARXNG_URL=https://search.example.invalid
-OLLAMA_URL=http://ollama:11434
+# Optional. Only needed for /v1/discover and /v1/recommendations; work
+# resolution is deterministic and does not use a model. See the benchmark above.
+OLLAMA_URL=
 # Optional. If omitted, a model is chosen automatically; see Model selection.
 OLLAMA_MODEL=
 # Include any sub-path your Shelfarr is mounted under. Rails deployments that
@@ -75,6 +105,8 @@ OLLAMA_MODEL=
 # must be e.g. http://shelfarr:5056/requests, not just http://shelfarr:5056.
 SHELFARR_URL=http://shelfarr:5056
 SHELFARR_API_TOKEN=...
+# Shelfarr attributes requests to a user; creates fail without it.
+SHELFARR_USER_ID=1
 # Optional protection for this service's write endpoint.
 SERVICE_API_TOKEN=...
 STATE_PATH=/data/discovery-state.json

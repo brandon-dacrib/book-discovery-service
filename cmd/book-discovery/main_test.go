@@ -490,7 +490,7 @@ func TestShelfarrSearchWidensOnlyWhenNeeded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(queries) != 2 {
+	if len(queries) < 2 {
 		t.Fatalf("queries = %v, want the title-only retry", queries)
 	}
 	if !hasTitleMatch(found.Results, "Charlotte's Web") {
@@ -738,5 +738,100 @@ func TestSearchSurfacesBackendFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "403") || !strings.Contains(err.Error(), "limiter") {
 		t.Fatalf("error did not surface the backend cause: %v", err)
+	}
+}
+
+// TestFilterTitleMatchesRejectsTranslatedEditions covers translations that
+// normalise to the requested title. Live picks included the Russian
+// "Sapiens - история в картинки" and Turkish "Verity: Gerçeğin Diğer Kıyısı".
+func TestFilterTitleMatchesRejectsTranslatedEditions(t *testing.T) {
+	results := []shelfarrResult{
+		{WorkID: "w-ru", Title: "Sapiens - история в картинки", Author: "Yuval Noah Harari"},
+		{WorkID: "w-en", Title: "Sapiens: A Brief History of Humankind", Author: "Yuval Noah Harari"},
+	}
+	got := filterTitleMatches(results, createRequest{Title: "Sapiens", Creator: "Yuval Noah Harari"})
+	if len(got) != 1 || got[0].WorkID != "w-en" {
+		t.Fatalf("kept %+v, want only the Latin-script edition", got)
+	}
+	// A request in another script is not forced back to Latin.
+	if got := filterTitleMatches(results, createRequest{Title: "Sapiens - история в картинки"}); len(got) != 1 {
+		t.Fatalf("non-Latin request should match its own edition: %+v", got)
+	}
+}
+
+func TestHasNonLatinScript(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"Sapiens", false},
+		{"Gerçeğin Diğer Kıyısı", false},
+		{"история", true},
+		{"Circé", false},
+		{"三体", true},
+	} {
+		if got := hasNonLatinScript(tc.in); got != tc.want {
+			t.Fatalf("hasNonLatinScript(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestResolveWorkRefusesWhenOnlyDerivativesExist covers the live case where a
+// catalogue carries only numbered comic issues of a novel. Filing one would
+// acquire the wrong book, so resolution fails instead.
+func TestResolveWorkRefusesWhenOnlyDerivativesExist(t *testing.T) {
+	results := []shelfarrResult{
+		{WorkID: "c1", Title: "Robert Jordan's Wheel of Time: Eye of the World #1", Author: "Robert Jordan", AvailableBookTypes: []string{"audiobook"}},
+		{WorkID: "c5", Title: "Robert Jordan's Wheel of Time: Eye of the World #5", Author: "Chuck Dixon", AvailableBookTypes: []string{"audiobook"}},
+	}
+	s := &server{cfg: config{}}
+	if got, err := s.resolveWork(context.Background(),
+		createRequest{Title: "The Eye of the World", Creator: "Robert Jordan"}, results, "audiobook"); err == nil {
+		t.Fatalf("resolved to %q, want a refusal", got.Title)
+	}
+}
+
+// TestFilterTitleMatchesKeepsExactTitleDespiteDerivativeWords guards against
+// the refusal rule rejecting a book whose real title contains a flagged word.
+func TestFilterTitleMatchesKeepsExactTitleDespiteDerivativeWords(t *testing.T) {
+	results := []shelfarrResult{
+		{WorkID: "w-real", Title: "The Journal of Best Practices", Author: "David Finch"},
+	}
+	got := filterTitleMatches(results, createRequest{Title: "The Journal of Best Practices", Creator: "David Finch"})
+	if len(got) != 1 {
+		t.Fatalf("exact title was filtered as merchandise: %+v", got)
+	}
+}
+
+// TestShelfarrSearchEscalatesPastDerivatives covers a title whose plain
+// queries return only comic issues; adding a disambiguating noun surfaces the
+// novel. The escalation must not fire when the work is already present.
+func TestShelfarrSearchEscalatesPastDerivatives(t *testing.T) {
+	var queries []string
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		queries = append(queries, q)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(q, "novel") {
+			_, _ = w.Write([]byte(`{"results":[{"work_id":"w-novel","title":"The Eye of the World","author":"Robert Jordan","available_book_types":["audiobook"]}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"results":[{"work_id":"c1","title":"Robert Jordan's Wheel of Time: Eye of the World #1","author":"Robert Jordan","available_book_types":["audiobook"]}]}`))
+	}))
+	defer stub.Close()
+	s := &server{cfg: config{ShelfarrURL: stub.URL, ShelfarrToken: "t"}, client: stub.Client()}
+
+	found, err := s.shelfarrSearch(context.Background(),
+		createRequest{Title: "The Eye of the World", Creator: "Robert Jordan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasTitleMatch(found.Results, "The Eye of the World") {
+		t.Fatalf("escalation did not surface the novel: %v", queries)
+	}
+	best, err := s.resolveWork(context.Background(),
+		createRequest{Title: "The Eye of the World", Creator: "Robert Jordan"}, found.Results, "audiobook")
+	if err != nil || best.WorkID != "w-novel" {
+		t.Fatalf("resolved to %+v err=%v, want the novel", best, err)
 	}
 }

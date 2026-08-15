@@ -22,6 +22,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 )
 
 // userAgent identifies this service to SearXNG so its bot filter and logs can
@@ -306,8 +307,18 @@ type server struct {
 
 func main() {
 	cfg := loadConfig()
-	if cfg.SearxURL == "" || cfg.OllamaURL == "" {
-		log.Fatal("SEARXNG_URL and OLLAMA_URL are required")
+	// Each backend enables a different half of the API, so the service starts
+	// with whatever is configured and reports what that leaves disabled.
+	// Resolution in particular is useful without a model: the deterministic
+	// filters settle most requests on their own.
+	if cfg.SearxURL == "" && cfg.ShelfarrURL == "" {
+		log.Fatal("set SEARXNG_URL for discovery, SHELFARR_URL for resolution, or both")
+	}
+	if cfg.SearxURL == "" {
+		log.Print("SEARXNG_URL unset; /v1/discover and /v1/recommendations are disabled")
+	}
+	if cfg.OllamaURL == "" {
+		log.Print("OLLAMA_URL unset; ranking and work resolution use deterministic selection only")
 	}
 	s := &server{
 		cfg:          cfg,
@@ -674,6 +685,9 @@ var derivativeWork = regexp.MustCompile(`(?i)study guide|lesson plan|\bsummary\b
 	// Catalogues also carry merchandise that borrows the title verbatim: blank
 	// notebooks, journals, and quiz books credited to unrelated "authors".
 	`\bnotebook\b|\bjournal\b|\bplanner\b|coloring book|\bdiary\b|\bcalendar\b|trivia|quiz book|\bunofficial\b|` +
+	// Art prints and poster sets are catalogued under the book's exact title:
+	// "Salt, Fat, Acid, Heat: a Collection of 20 Prints".
+	`collection of \d+|\bprints\b|\bposter\b|\bart cards\b|` +
 	// Serialized comic adaptations carry an issue number and are not the novel:
 	// "Robert Jordan's Wheel of Time: Eye of the World #5" outranked the book.
 	`#\s*\d+`)
@@ -708,6 +722,13 @@ func (s *server) resolveWork(ctx context.Context, input createRequest, results [
 	// telling genuine editions of the same work apart.
 	if titled := filterTitleMatches(eligible, input); len(titled) > 0 {
 		eligible = titled
+	} else if allDerivative(eligible) {
+		// Every match is a study guide, adaptation, or piece of merchandise,
+		// which means the catalogue does not carry the work itself. Filing the
+		// closest thing would acquire the wrong book, so refuse instead. This
+		// is what a request for "The Eye of the World" hits: the catalogue
+		// returns only numbered comic issues.
+		return shelfarrResult{}, fmt.Errorf("Shelfarr returned only derivative editions for %q (study guides, adaptations, or merchandise); the work itself does not appear in its catalogue", input.Title)
 	}
 	if len(eligible) == 1 || s.cfg.OllamaURL == "" {
 		return pickShelfarrResult(eligible, bookType)
@@ -812,9 +833,16 @@ func (s *server) shelfarrSearch(ctx context.Context, input createRequest) (shelf
 }
 
 func (s *server) shelfarrSearchWithRetry(ctx context.Context, input createRequest, retry bool) (shelfarrSearchResponse, error) {
+	// The third and fourth forms are escalations, reached only when the plain
+	// queries come back without the work. A title whose series has a comic
+	// adaptation returns nothing but numbered issues -- "The Eye of the World"
+	// yields 20 of them -- while adding a disambiguating noun surfaces the
+	// novel. Each query costs an upstream call, so they run only when needed.
 	queries := uniqueNonEmpty([]string{
 		strings.Join([]string{input.Title, input.Creator}, " "),
 		input.Title,
+		strings.Join([]string{input.Title, input.Creator, "novel"}, " "),
+		strings.Join([]string{input.Title, input.Creator, "book"}, " "),
 	})
 	var merged shelfarrSearchResponse
 	seen := map[string]bool{}
@@ -876,10 +904,39 @@ func hasTitleMatch(results []shelfarrResult, title string) bool {
 	return false
 }
 
+// allDerivative reports whether every candidate is something other than the
+// work itself.
+func allDerivative(results []shelfarrResult) bool {
+	if len(results) == 0 {
+		return false
+	}
+	for _, result := range results {
+		if !derivativeWork.MatchString(result.Title) {
+			return false
+		}
+	}
+	return true
+}
+
 func filterTitleMatches(results []shelfarrResult, input createRequest) []shelfarrResult {
+	// A request written in Latin script is not asking for the Russian or
+	// Turkish edition. Catalogues list translations under a title that
+	// normalises to the same thing, so drop other scripts up front rather
+	// than hoping the model notices.
+	wantLatin := !hasNonLatinScript(input.Title)
+	want := normalizeTitle(input.Title)
 	out := make([]shelfarrResult, 0, len(results))
 	for _, result := range results {
-		if derivativeWork.MatchString(result.Title) {
+		// A candidate titled exactly as asked is what the caller wants, even if
+		// it trips the derivative pattern — someone requesting "The Journal of
+		// Best Practices" is not asking for a blank journal. Only titles that
+		// match on the part before a subtitle are screened, which is where the
+		// merchandise and study guides live.
+		exact := normalizeTitle(result.Title) == want
+		if !exact && derivativeWork.MatchString(result.Title) {
+			continue
+		}
+		if wantLatin && hasNonLatinScript(result.Title) {
 			continue
 		}
 		if titleMatches(result, input.Title, input.Creator) {
@@ -917,13 +974,37 @@ func filterTitleMatches(results []shelfarrResult, input createRequest) []shelfar
 }
 
 func titleMatchesUnfolded(result shelfarrResult, title string) bool {
-	want := strings.TrimSpace(titleNoise.ReplaceAllString(strings.ToLower(title), " "))
+	want := unfoldedKey(title)
 	if want == "" {
 		return false
 	}
-	candidate := strings.TrimSpace(titleNoise.ReplaceAllString(strings.ToLower(result.Title), " "))
-	before := strings.TrimSpace(titleNoise.ReplaceAllString(strings.ToLower(strings.SplitN(result.Title, ":", 2)[0]), " "))
-	return candidate == want || before == want
+	return unfoldedKey(result.Title) == want ||
+		unfoldedKey(strings.SplitN(result.Title, ":", 2)[0]) == want
+}
+
+// unfoldedKey normalises punctuation and case but deliberately leaves accents
+// alone, so "Circe" and "Circé" stay distinguishable.
+func unfoldedKey(value string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(value) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// hasNonLatinScript reports whether a string carries letters from a script
+// other than Latin, which marks a translated edition.
+func hasNonLatinScript(value string) bool {
+	for _, r := range value {
+		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // authorMatches compares on surname, which survives the initials, accents, and
@@ -964,8 +1045,6 @@ func titleMatches(result shelfarrResult, title, creator string) bool {
 	return false
 }
 
-var titleNoise = regexp.MustCompile(`[^a-z0-9]+`)
-
 // foldAccents maps the accented Latin letters that appear in author and title
 // data to ASCII. Catalogues disagree on diacritics — "Gabriel García Márquez"
 // against a request for "Gabriel Garcia Marquez" — and folding keeps that from
@@ -983,9 +1062,21 @@ var accentFolds = strings.NewReplacer(
 
 // normalizeTitle lowercases, folds accents, drops punctuation, and removes a
 // leading article so "The Joy of Cooking" and "Joy of Cooking" compare equal.
+//
+// Letters outside Latin are kept rather than stripped. Discarding them made
+// the Russian "Sapiens - история в картинки" normalise to bare "sapiens" and
+// compare equal to the English edition.
 func normalizeTitle(value string) string {
 	folded := accentFolds.Replace(strings.ToLower(value))
-	cleaned := strings.TrimSpace(titleNoise.ReplaceAllString(folded, " "))
+	var b strings.Builder
+	for _, r := range folded {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune(' ')
+		}
+	}
+	cleaned := strings.Join(strings.Fields(b.String()), " ")
 	for _, article := range []string{"the ", "a ", "an "} {
 		cleaned = strings.TrimPrefix(cleaned, article)
 	}
@@ -1050,6 +1141,10 @@ func (s *server) shelfarrJSONInto(ctx context.Context, method, endpoint string, 
 }
 
 func (s *server) discover(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.SearxURL == "" {
+		http.Error(w, "SearXNG is not configured", http.StatusServiceUnavailable)
+		return
+	}
 	var req discoverRequest
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1074,6 +1169,10 @@ func (s *server) discover(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) recommendations(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.SearxURL == "" {
+		http.Error(w, "SearXNG is not configured", http.StatusServiceUnavailable)
+		return
+	}
 	var input recommendationRequest
 	if err := decodeJSON(r, &input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1250,6 +1349,10 @@ func (s *server) chatRankings(ctx context.Context, prompt string) ([]rankEntry, 
 		"stream":   false,
 		"format":   "json",
 		"messages": []map[string]string{{"role": "user", "content": prompt}},
+		// Picking the right edition is a classification, not a creative task.
+		// Sampling made repeat runs of the same book disagree with themselves,
+		// which is both wrong more often and impossible to benchmark.
+		"options": map[string]any{"temperature": 0, "seed": 1},
 	}
 	if thinking {
 		// Only send `think` to models that advertise it; Ollama rejects the
