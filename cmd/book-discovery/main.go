@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +27,7 @@ type config struct {
 	ShelfarrURL   string
 	ShelfarrToken string
 	ServiceToken  string
+	StatePath     string
 	Timeout       time.Duration
 }
 
@@ -44,6 +47,7 @@ func loadConfig() config {
 		ShelfarrURL:   strings.TrimRight(env("SHELFARR_URL", ""), "/"),
 		ShelfarrToken: env("SHELFARR_API_TOKEN", ""),
 		ServiceToken:  env("SERVICE_API_TOKEN", ""),
+		StatePath:     env("STATE_PATH", "/data/discovery-state.json"),
 		Timeout:       45 * time.Second,
 	}
 }
@@ -112,6 +116,25 @@ type ollamaModelsResponse struct {
 	Models []ollamaModel `json:"models"`
 }
 
+type historyEntry struct {
+	ID        string      `json:"id"`
+	Intent    string      `json:"intent"`
+	CreatedAt time.Time   `json:"created_at"`
+	Request   any         `json:"request"`
+	Results   []candidate `json:"results,omitempty"`
+	Response  any         `json:"response,omitempty"`
+}
+
+type persistedState struct {
+	Entries []historyEntry `json:"entries"`
+}
+
+type stateStore struct {
+	mu      sync.Mutex
+	path    string
+	entries []historyEntry
+}
+
 type shelfarrSearchResponse struct {
 	Results []struct {
 		WorkID      string `json:"work_id"`
@@ -128,6 +151,7 @@ type shelfarrSearchResponse struct {
 type server struct {
 	cfg    config
 	client *http.Client
+	state  *stateStore
 }
 
 func main() {
@@ -136,8 +160,14 @@ func main() {
 		log.Fatal("SEARXNG_URL and OLLAMA_URL are required")
 	}
 	s := &server{cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
+	var err error
+	s.state, err = openState(cfg.StatePath)
+	if err != nil {
+		log.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /v1/history", s.history)
 	mux.HandleFunc("POST /v1/discover", s.discover)
 	mux.HandleFunc("POST /v1/recommendations", s.recommendations)
 	mux.HandleFunc("POST /v1/requests", s.createShelfarrRequest)
@@ -154,6 +184,88 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func openState(path string) (*stateStore, error) {
+	store := &stateStore{path: path}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return store, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read state: %w", err)
+	}
+	var state persistedState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("decode state: %w", err)
+	}
+	store.entries = state.Entries
+	return store, nil
+}
+
+func (s *stateStore) append(entry historyEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries = append(s.entries, entry)
+	if len(s.entries) > 500 {
+		s.entries = s.entries[len(s.entries)-500:]
+	}
+	data, err := json.MarshalIndent(persistedState{Entries: s.entries}, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o750); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(s.path), ".discovery-state-*")
+	if err != nil {
+		return err
+	}
+	temporaryName := temporary.Name()
+	defer os.Remove(temporaryName)
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(data); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryName, s.path)
+}
+
+func (s *stateStore) recent(limit int) []historyEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	start := len(s.entries) - limit
+	if start < 0 {
+		start = 0
+	}
+	entries := append([]historyEntry(nil), s.entries[start:]...)
+	for left, right := 0, len(entries)-1; left < right; left, right = left+1, right-1 {
+		entries[left], entries[right] = entries[right], entries[left]
+	}
+	return entries
+}
+
+func (s *server) history(w http.ResponseWriter, r *http.Request) {
+	if !s.authorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"entries": s.state.recent(limit)})
 }
 
 func (s *server) createShelfarrRequest(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +293,7 @@ func (s *server) createShelfarrRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	s.record("request", input, nil, created)
 	jsonResponse(w, http.StatusAccepted, created)
 }
 
@@ -329,6 +442,7 @@ func (s *server) discover(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ollama ranking unavailable: %v", rankingErr)
 		ranked = fallbackRank(req, results)
 	}
+	s.record("discover", req, ranked, nil)
 	jsonResponse(w, http.StatusOK, map[string]any{"request": req, "results": ranked, "ranked_by": map[bool]string{true: "ollama", false: "deterministic"}[rankingErr == nil]})
 }
 
@@ -360,7 +474,25 @@ func (s *server) recommendations(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ollama recommendation ranking unavailable: %v", rankingErr)
 		ranked = fallbackRank(req, results)
 	}
+	s.record("recommendation", input, ranked, nil)
 	jsonResponse(w, http.StatusOK, map[string]any{"request": input, "results": ranked, "ranked_by": map[bool]string{true: "ollama", false: "deterministic"}[rankingErr == nil]})
+}
+
+func (s *server) record(intent string, request any, results []candidate, response any) {
+	if s.state == nil {
+		return
+	}
+	entry := historyEntry{
+		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+		Intent:    intent,
+		CreatedAt: time.Now().UTC(),
+		Request:   request,
+		Results:   results,
+		Response:  response,
+	}
+	if err := s.state.append(entry); err != nil {
+		log.Printf("persist %s history: %v", intent, err)
+	}
 }
 
 func (s *server) search(ctx context.Context, req discoverRequest) ([]candidate, error) {

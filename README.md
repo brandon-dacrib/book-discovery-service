@@ -19,6 +19,7 @@ SHELFARR_URL=http://shelfarr:5056
 SHELFARR_API_TOKEN=...
 # Optional protection for this service's write endpoint.
 SERVICE_API_TOKEN=...
+STATE_PATH=/data/discovery-state.json
 LISTEN_ADDR=:8080
 ```
 
@@ -55,6 +56,10 @@ curl -X POST http://localhost:8080/v1/requests \
   -H "authorization: Bearer $SERVICE_API_TOKEN" \
   -d '{"kind":"audiobook","title":"Cappadonna","creator":"Jahquel J.","notes":"Created from discovery"}'
 ```
+
+Discovery, recommendation, and request intents are retained in the JSON state
+file named by `STATE_PATH` (up to 500 recent entries). `GET /v1/history` reads
+that history and uses `SERVICE_API_TOKEN` when configured.
 
 ## Run
 

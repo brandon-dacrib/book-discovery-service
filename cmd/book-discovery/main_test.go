@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -22,5 +23,24 @@ func TestOllamaModelHonorsExplicitOverride(t *testing.T) {
 	model, err := s.ollamaModel(context.Background())
 	if err != nil || model != "qwen3:14b" {
 		t.Fatalf("model=%q err=%v", model, err)
+	}
+}
+
+func TestStateStorePersistsRecentEntries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store, err := openState(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.append(historyEntry{ID: "one", Intent: "discover"}); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := openState(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := reloaded.recent(10)
+	if len(entries) != 1 || entries[0].ID != "one" {
+		t.Fatalf("unexpected entries: %+v", entries)
 	}
 }

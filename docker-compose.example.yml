@@ -13,8 +13,11 @@ services:
       SHELFARR_URL: ${SHELFARR_URL:-}
       SHELFARR_API_TOKEN: ${SHELFARR_API_TOKEN:-}
       SERVICE_API_TOKEN: ${SERVICE_API_TOKEN:-}
+      STATE_PATH: /data/discovery-state.json
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    volumes:
+      - ./data:/data
