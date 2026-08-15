@@ -1,0 +1,62 @@
+{
+ "Qwertyuiop Asdfghjkl|Zxcvbnm Qwerty": {
+  "title": "Qwertyuiop Asdfghjkl",
+  "author": "Zxcvbnm Qwerty",
+  "genre": "must refuse: invented title",
+  "narrow": [],
+  "broad": [
+   {"work_id": "hardcover:900001", "title": "Back in Time with Thomas Edison", "author": "Dan Gutman", "year": "2015", "confidence": 70, "available_book_types": ["audiobook", "ebook"]},
+   {"work_id": "hardcover:900002", "title": "ZZZ", "author": "Megan Hart", "year": "2011", "confidence": 70, "available_book_types": ["audiobook", "ebook"]}
+  ]
+ },
+ "The Eye of the Storm|Patrick White": {
+  "title": "The Eye of the Storm",
+  "author": "Patrick White",
+  "genre": "must refuse: catalogue carries only comic issues",
+  "narrow": [
+   {"work_id": "hardcover:900010", "title": "Wheel of Time: Eye of the Storm #1", "author": "Chuck Dixon", "year": "2010", "confidence": 70, "available_book_types": ["audiobook"]},
+   {"work_id": "hardcover:900011", "title": "Wheel of Time: Eye of the Storm #2", "author": "Chuck Dixon", "year": "2010", "confidence": 70, "available_book_types": ["audiobook"]}
+  ],
+  "broad": []
+ },
+ "Mistwood|Ambiguous Author": {
+  "title": "Mistwood",
+  "author": "Ambiguous Author",
+  "genre": "must refuse: several real works share the title, none by the requested author",
+  "narrow": [],
+  "broad": [
+   {"work_id": "hardcover:900020", "title": "Mistwood", "author": "Leah Cypess", "year": "2010", "confidence": 70, "available_book_types": ["audiobook", "ebook"]},
+   {"work_id": "hardcover:900021", "title": "Mistwood", "author": "Simon Kewin", "year": "2019", "confidence": 70, "available_book_types": ["audiobook", "ebook"]}
+  ]
+ },
+ "Sapiens|Yuval Noah Harari": {
+  "title": "Sapiens",
+  "author": "Yuval Noah Harari",
+  "genre": "must reject the translated edition and the summary",
+  "narrow": [
+   {"work_id": "hardcover:900030", "title": "Sapiens - история в картинки", "author": "Yuval Noah Harari", "year": "2020", "confidence": 70, "available_book_types": ["audiobook", "ebook"]},
+   {"work_id": "hardcover:900031", "title": "Summary of Sapiens by Yuval Noah Harari", "author": "QuickRead", "year": "2019", "confidence": 70, "available_book_types": ["audiobook", "ebook"]},
+   {"work_id": "hardcover:900032", "title": "Sapiens: A Brief History of Humankind", "author": "Yuval Noah Harari", "year": "2014", "confidence": 70, "available_book_types": ["audiobook", "ebook"]}
+  ],
+  "broad": []
+ },
+ "Circe|Madeline Miller": {
+  "title": "Circe",
+  "author": "Madeline Miller",
+  "genre": "must reject merchandise credited to someone else",
+  "narrow": [
+   {"work_id": "hardcover:900040", "title": "Circe: Madeline Miller Notebook with 8. 5 X 11 in 100 Pages", "author": "Idriss Pedro", "year": "2021", "confidence": 70, "available_book_types": ["audiobook", "ebook"]},
+   {"work_id": "hardcover:900041", "title": "Circe", "author": "Madeline Miller", "year": "2018", "confidence": 70, "available_book_types": ["audiobook", "ebook"]}
+  ],
+  "broad": []
+ },
+ "The Journal of Best Practices|David Finch": {
+  "title": "The Journal of Best Practices",
+  "author": "David Finch",
+  "genre": "must resolve: a real book whose title trips the merchandise pattern",
+  "narrow": [
+   {"work_id": "hardcover:900050", "title": "The Journal of Best Practices", "author": "David Finch", "year": "2012", "confidence": 70, "available_book_types": ["audiobook", "ebook"]}
+  ],
+  "broad": []
+ }
+}

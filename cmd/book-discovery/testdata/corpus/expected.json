@@ -1,0 +1,1300 @@
+{
+ "adversarial.json|Circe|Madeline Miller|audiobook": {
+  "work_id": "hardcover:900041",
+  "title": "Circe",
+  "author": "Madeline Miller"
+ },
+ "adversarial.json|Circe|Madeline Miller|ebook": {
+  "work_id": "hardcover:900041",
+  "title": "Circe",
+  "author": "Madeline Miller"
+ },
+ "adversarial.json|Mistwood|Ambiguous Author|audiobook": {
+  "refused": true
+ },
+ "adversarial.json|Mistwood|Ambiguous Author|ebook": {
+  "refused": true
+ },
+ "adversarial.json|Qwertyuiop Asdfghjkl|Zxcvbnm Qwerty|audiobook": {
+  "refused": true
+ },
+ "adversarial.json|Qwertyuiop Asdfghjkl|Zxcvbnm Qwerty|ebook": {
+  "refused": true
+ },
+ "adversarial.json|Sapiens|Yuval Noah Harari|audiobook": {
+  "work_id": "hardcover:900032",
+  "title": "Sapiens: A Brief History of Humankind",
+  "author": "Yuval Noah Harari"
+ },
+ "adversarial.json|Sapiens|Yuval Noah Harari|ebook": {
+  "work_id": "hardcover:900032",
+  "title": "Sapiens: A Brief History of Humankind",
+  "author": "Yuval Noah Harari"
+ },
+ "adversarial.json|The Eye of the Storm|Patrick White|audiobook": {
+  "refused": true
+ },
+ "adversarial.json|The Eye of the Storm|Patrick White|ebook": {
+  "refused": true
+ },
+ "adversarial.json|The Journal of Best Practices|David Finch|audiobook": {
+  "work_id": "hardcover:900050",
+  "title": "The Journal of Best Practices",
+  "author": "David Finch"
+ },
+ "adversarial.json|The Journal of Best Practices|David Finch|ebook": {
+  "work_id": "hardcover:900050",
+  "title": "The Journal of Best Practices",
+  "author": "David Finch"
+ },
+ "classic75.json|1984|George Orwell|audiobook": {
+  "work_id": "hardcover:379760",
+  "title": "1984",
+  "author": "George Orwell"
+ },
+ "classic75.json|1984|George Orwell|ebook": {
+  "work_id": "hardcover:379760",
+  "title": "1984",
+  "author": "George Orwell"
+ },
+ "classic75.json|Ariel|Sylvia Plath|audiobook": {
+  "work_id": "hardcover:438994",
+  "title": "Ariel",
+  "author": "Sylvia Plath"
+ },
+ "classic75.json|Ariel|Sylvia Plath|ebook": {
+  "work_id": "hardcover:438994",
+  "title": "Ariel",
+  "author": "Sylvia Plath"
+ },
+ "classic75.json|Atomic Habits|James Clear|audiobook": {
+  "work_id": "hardcover:428023",
+  "title": "Atomic habits: An Easy \u0026 Proven Way to Build Good Habits \u0026 Break Bad Ones",
+  "author": "James Clear"
+ },
+ "classic75.json|Atomic Habits|James Clear|ebook": {
+  "work_id": "hardcover:428023",
+  "title": "Atomic habits: An Easy \u0026 Proven Way to Build Good Habits \u0026 Break Bad Ones",
+  "author": "James Clear"
+ },
+ "classic75.json|Beach Read|Emily Henry|audiobook": {
+  "work_id": "hardcover:429002",
+  "title": "Beach Read",
+  "author": "Emily Henry"
+ },
+ "classic75.json|Beach Read|Emily Henry|ebook": {
+  "work_id": "hardcover:429002",
+  "title": "Beach Read",
+  "author": "Emily Henry"
+ },
+ "classic75.json|Beloved|Toni Morrison|audiobook": {
+  "work_id": "hardcover:374373",
+  "title": "Beloved",
+  "author": "Toni Morrison"
+ },
+ "classic75.json|Beloved|Toni Morrison|ebook": {
+  "work_id": "hardcover:374373",
+  "title": "Beloved",
+  "author": "Toni Morrison"
+ },
+ "classic75.json|Beyond Good and Evil|Friedrich Nietzsche|audiobook": {
+  "work_id": "hardcover:482336",
+  "title": "Beyond Good and Evil",
+  "author": "Friedrich Nietzsche"
+ },
+ "classic75.json|Beyond Good and Evil|Friedrich Nietzsche|ebook": {
+  "work_id": "hardcover:482336",
+  "title": "Beyond Good and Evil",
+  "author": "Friedrich Nietzsche"
+ },
+ "classic75.json|Big Little Lies|Liane Moriarty|audiobook": {
+  "work_id": "hardcover:437781",
+  "title": "Big Little Lies",
+  "author": "Liane Moriarty"
+ },
+ "classic75.json|Big Little Lies|Liane Moriarty|ebook": {
+  "work_id": "hardcover:437781",
+  "title": "Big Little Lies",
+  "author": "Liane Moriarty"
+ },
+ "classic75.json|Bird Box|Josh Malerman|audiobook": {
+  "work_id": "hardcover:432756",
+  "title": "Bird Box",
+  "author": "Josh Malerman"
+ },
+ "classic75.json|Bird Box|Josh Malerman|ebook": {
+  "work_id": "hardcover:432756",
+  "title": "Bird Box",
+  "author": "Josh Malerman"
+ },
+ "classic75.json|Born a Crime|Trevor Noah|audiobook": {
+  "work_id": "hardcover:375699",
+  "title": "Born A Crime: Stories from a South African Childhood",
+  "author": "Trevor Noah"
+ },
+ "classic75.json|Born a Crime|Trevor Noah|ebook": {
+  "work_id": "hardcover:375699",
+  "title": "Born A Crime: Stories from a South African Childhood",
+  "author": "Trevor Noah"
+ },
+ "classic75.json|Charlotte's Web|E. B. White|audiobook": {
+  "work_id": "hardcover:2376395",
+  "title": "Charlotte's Web: The Classic Children’s Story of Barnyard Friendship, Adapted and Illustrated for Babies and Toddlers Ages 0-4",
+  "author": "E. B White"
+ },
+ "classic75.json|Charlotte's Web|E. B. White|ebook": {
+  "work_id": "hardcover:2376395",
+  "title": "Charlotte's Web: The Classic Children’s Story of Barnyard Friendship, Adapted and Illustrated for Babies and Toddlers Ages 0-4",
+  "author": "E. B White"
+ },
+ "classic75.json|Circe|Madeline Miller|audiobook": {
+  "work_id": "hardcover:383598",
+  "title": "Circé",
+  "author": "Madeline Miller"
+ },
+ "classic75.json|Circe|Madeline Miller|ebook": {
+  "work_id": "hardcover:383598",
+  "title": "Circé",
+  "author": "Madeline Miller"
+ },
+ "classic75.json|Cosmos|Carl Sagan|audiobook": {
+  "work_id": "hardcover:349240",
+  "title": "Cosmos",
+  "author": "Carl Sagan"
+ },
+ "classic75.json|Cosmos|Carl Sagan|ebook": {
+  "work_id": "hardcover:349240",
+  "title": "Cosmos",
+  "author": "Carl Sagan"
+ },
+ "classic75.json|Deep Work|Cal Newport|audiobook": {
+  "work_id": "hardcover:306986",
+  "title": "Deep Work: Rules for Focused Success in a Distracted World",
+  "author": "Cal Newport"
+ },
+ "classic75.json|Deep Work|Cal Newport|ebook": {
+  "work_id": "hardcover:306986",
+  "title": "Deep Work: Rules for Focused Success in a Distracted World",
+  "author": "Cal Newport"
+ },
+ "classic75.json|Do Androids Dream of Electric Sheep?|Philip K. Dick|audiobook": {
+  "work_id": "hardcover:268150",
+  "title": "Do Androids Dream of Electric Sheep?",
+  "author": "Philip K. Dick"
+ },
+ "classic75.json|Do Androids Dream of Electric Sheep?|Philip K. Dick|ebook": {
+  "work_id": "hardcover:268150",
+  "title": "Do Androids Dream of Electric Sheep?",
+  "author": "Philip K. Dick"
+ },
+ "classic75.json|Dune|Frank Herbert|audiobook": {
+  "work_id": "hardcover:312460",
+  "title": "Dune",
+  "author": "Frank Herbert"
+ },
+ "classic75.json|Dune|Frank Herbert|ebook": {
+  "work_id": "hardcover:312460",
+  "title": "Dune",
+  "author": "Frank Herbert"
+ },
+ "classic75.json|Educated|Tara Westover|audiobook": {
+  "work_id": "hardcover:44186",
+  "title": "Educated: A Memoir",
+  "author": "Tara Westover"
+ },
+ "classic75.json|Educated|Tara Westover|ebook": {
+  "work_id": "hardcover:44186",
+  "title": "Educated: A Memoir",
+  "author": "Tara Westover"
+ },
+ "classic75.json|Ender's Game|Orson Scott Card|audiobook": {
+  "work_id": "hardcover:158268",
+  "title": "Ender's Game",
+  "author": "Orson Scott Card"
+ },
+ "classic75.json|Ender's Game|Orson Scott Card|ebook": {
+  "work_id": "hardcover:158268",
+  "title": "Ender's Game",
+  "author": "Orson Scott Card"
+ },
+ "classic75.json|Frankenstein|Mary Shelley|audiobook": {
+  "work_id": "hardcover:28722",
+  "title": "Frankenstein",
+  "author": "Mary Shelley"
+ },
+ "classic75.json|Frankenstein|Mary Shelley|ebook": {
+  "work_id": "hardcover:28722",
+  "title": "Frankenstein",
+  "author": "Mary Shelley"
+ },
+ "classic75.json|Gone Girl|Gillian Flynn|audiobook": {
+  "work_id": "hardcover:1145808",
+  "title": "Gone Girl",
+  "author": "Gillian Flynn"
+ },
+ "classic75.json|Gone Girl|Gillian Flynn|ebook": {
+  "work_id": "hardcover:1145808",
+  "title": "Gone Girl",
+  "author": "Gillian Flynn"
+ },
+ "classic75.json|Good to Great|Jim Collins|audiobook": {
+  "work_id": "hardcover:2648996",
+  "title": "Good to Great: Waarom sommige bedrijven een sprong vooruit maken... en anderen niet",
+  "author": "Jim Collins"
+ },
+ "classic75.json|Good to Great|Jim Collins|ebook": {
+  "work_id": "hardcover:2648996",
+  "title": "Good to Great: Waarom sommige bedrijven een sprong vooruit maken... en anderen niet",
+  "author": "Jim Collins"
+ },
+ "classic75.json|He Who Fights with Monsters|Shirtaloon|audiobook": {
+  "work_id": "hardcover:2371526",
+  "title": "He Who Fights with Monsters",
+  "author": "Shirtaloon"
+ },
+ "classic75.json|He Who Fights with Monsters|Shirtaloon|ebook": {
+  "work_id": "hardcover:2371526",
+  "title": "He Who Fights with Monsters",
+  "author": "Shirtaloon"
+ },
+ "classic75.json|Hyperion|Dan Simmons|audiobook": {
+  "work_id": "hardcover:427460",
+  "title": "Hyperion",
+  "author": "Dan Simmons"
+ },
+ "classic75.json|Hyperion|Dan Simmons|ebook": {
+  "work_id": "hardcover:427460",
+  "title": "Hyperion",
+  "author": "Dan Simmons"
+ },
+ "classic75.json|In Cold Blood|Truman Capote|audiobook": {
+  "work_id": "hardcover:429559",
+  "title": "In Cold Blood",
+  "author": "Truman Capote"
+ },
+ "classic75.json|In Cold Blood|Truman Capote|ebook": {
+  "work_id": "hardcover:429559",
+  "title": "In Cold Blood",
+  "author": "Truman Capote"
+ },
+ "classic75.json|Interpreter of Maladies|Jhumpa Lahiri|audiobook": {
+  "work_id": "hardcover:431161",
+  "title": "Interpreter of Maladies",
+  "author": "Jhumpa Lahiri"
+ },
+ "classic75.json|Interpreter of Maladies|Jhumpa Lahiri|ebook": {
+  "work_id": "hardcover:431161",
+  "title": "Interpreter of Maladies",
+  "author": "Jhumpa Lahiri"
+ },
+ "classic75.json|It|Stephen King|audiobook": {
+  "work_id": "hardcover:373525",
+  "title": "It",
+  "author": "Stephen King"
+ },
+ "classic75.json|It|Stephen King|ebook": {
+  "work_id": "hardcover:373525",
+  "title": "It",
+  "author": "Stephen King"
+ },
+ "classic75.json|Killers of the Flower Moon|David Grann|audiobook": {
+  "work_id": "hardcover:434558",
+  "title": "Killers of the Flower Moon: The Osage Murders and the Birth of the FBI",
+  "author": "David Grann"
+ },
+ "classic75.json|Killers of the Flower Moon|David Grann|ebook": {
+  "work_id": "hardcover:434558",
+  "title": "Killers of the Flower Moon: The Osage Murders and the Birth of the FBI",
+  "author": "David Grann"
+ },
+ "classic75.json|Labyrinths|Jorge Luis Borges|audiobook": {
+  "work_id": "hardcover:377624",
+  "title": "Labyrinths: Selected Stories \u0026 Other Writings",
+  "author": "Jorge Luis Borges"
+ },
+ "classic75.json|Labyrinths|Jorge Luis Borges|ebook": {
+  "work_id": "hardcover:377624",
+  "title": "Labyrinths: Selected Stories \u0026 Other Writings",
+  "author": "Jorge Luis Borges"
+ },
+ "classic75.json|Leaves of Grass|Walt Whitman|audiobook": {
+  "work_id": "hardcover:2097743",
+  "title": "Leaves of grass",
+  "author": "Walt Whitman"
+ },
+ "classic75.json|Leaves of Grass|Walt Whitman|ebook": {
+  "work_id": "hardcover:2097743",
+  "title": "Leaves of grass",
+  "author": "Walt Whitman"
+ },
+ "classic75.json|Maus|Art Spiegelman|audiobook": {
+  "work_id": "hardcover:1896623",
+  "title": "Maus",
+  "author": "Art Spiegelman"
+ },
+ "classic75.json|Maus|Art Spiegelman|ebook": {
+  "work_id": "hardcover:1896623",
+  "title": "Maus",
+  "author": "Art Spiegelman"
+ },
+ "classic75.json|Meditations|Marcus Aurelius|audiobook": {
+  "work_id": "hardcover:157096",
+  "title": "Meditations",
+  "author": "Marcus Aurelius"
+ },
+ "classic75.json|Meditations|Marcus Aurelius|ebook": {
+  "work_id": "hardcover:157096",
+  "title": "Meditations",
+  "author": "Marcus Aurelius"
+ },
+ "classic75.json|Milk and Honey|Rupi Kaur|audiobook": {
+  "work_id": "hardcover:428472",
+  "title": "Milk and Honey",
+  "author": "Rupi Kaur"
+ },
+ "classic75.json|Milk and Honey|Rupi Kaur|ebook": {
+  "work_id": "hardcover:428472",
+  "title": "Milk and Honey",
+  "author": "Rupi Kaur"
+ },
+ "classic75.json|Mother of Learning|nobody103|audiobook": {
+  "work_id": "hardcover:507178",
+  "title": "Mother of Learning: ARC 1",
+  "author": "Domagoj Kurmaic"
+ },
+ "classic75.json|Mother of Learning|nobody103|ebook": {
+  "work_id": "hardcover:507178",
+  "title": "Mother of Learning: ARC 1",
+  "author": "Domagoj Kurmaic"
+ },
+ "classic75.json|Neuromancer|William Gibson|audiobook": {
+  "work_id": "hardcover:313448",
+  "title": "Neuromancer",
+  "author": "William Gibson"
+ },
+ "classic75.json|Neuromancer|William Gibson|ebook": {
+  "work_id": "hardcover:313448",
+  "title": "Neuromancer",
+  "author": "William Gibson"
+ },
+ "classic75.json|Nine Stories|J. D. Salinger|audiobook": {
+  "work_id": "hardcover:113154",
+  "title": "Nine Stories",
+  "author": "J. D. Salinger"
+ },
+ "classic75.json|Nine Stories|J. D. Salinger|ebook": {
+  "work_id": "hardcover:113154",
+  "title": "Nine Stories",
+  "author": "J. D. Salinger"
+ },
+ "classic75.json|One Hundred Years of Solitude|Gabriel Garcia Marquez|audiobook": {
+  "work_id": "hardcover:762271",
+  "title": "One Hundred Years of Solitude",
+  "author": "Gabriel García Márquez"
+ },
+ "classic75.json|One Hundred Years of Solitude|Gabriel Garcia Marquez|ebook": {
+  "work_id": "hardcover:762271",
+  "title": "One Hundred Years of Solitude",
+  "author": "Gabriel García Márquez"
+ },
+ "classic75.json|Outlander|Diana Gabaldon|audiobook": {
+  "work_id": "hardcover:427404",
+  "title": "Outlander",
+  "author": "Diana Gabaldon"
+ },
+ "classic75.json|Outlander|Diana Gabaldon|ebook": {
+  "work_id": "hardcover:427404",
+  "title": "Outlander",
+  "author": "Diana Gabaldon"
+ },
+ "classic75.json|Persepolis|Marjane Satrapi|audiobook": {
+  "work_id": "hardcover:261377",
+  "title": "Persepolis: The Story of a Childhood",
+  "author": "Marjane Satrapi"
+ },
+ "classic75.json|Persepolis|Marjane Satrapi|ebook": {
+  "work_id": "hardcover:261377",
+  "title": "Persepolis: The Story of a Childhood",
+  "author": "Marjane Satrapi"
+ },
+ "classic75.json|Pride and Prejudice|Jane Austen|audiobook": {
+  "work_id": "hardcover:379647",
+  "title": "Pride and Prejudice",
+  "author": "Jane Austen"
+ },
+ "classic75.json|Pride and Prejudice|Jane Austen|ebook": {
+  "work_id": "hardcover:379647",
+  "title": "Pride and Prejudice",
+  "author": "Jane Austen"
+ },
+ "classic75.json|SPQR|Mary Beard|audiobook": {
+  "work_id": "hardcover:267692",
+  "title": "SPQR: A History of Ancient Rome",
+  "author": "Mary Beard"
+ },
+ "classic75.json|SPQR|Mary Beard|ebook": {
+  "work_id": "hardcover:267692",
+  "title": "SPQR: A History of Ancient Rome",
+  "author": "Mary Beard"
+ },
+ "classic75.json|Salt, Fat, Acid, Heat|Samin Nosrat|audiobook": {
+  "work_id": "hardcover:631",
+  "title": "Salt, Fat, Acid, Heat: Mastering the Elements of Good Cooking",
+  "author": "Samin Nosrat"
+ },
+ "classic75.json|Salt, Fat, Acid, Heat|Samin Nosrat|ebook": {
+  "work_id": "hardcover:631",
+  "title": "Salt, Fat, Acid, Heat: Mastering the Elements of Good Cooking",
+  "author": "Samin Nosrat"
+ },
+ "classic75.json|Sapiens|Yuval Noah Harari|audiobook": {
+  "work_id": "hardcover:375634",
+  "title": "Sapiens: A Brief History of Humankind",
+  "author": "Yuval Noah Harari"
+ },
+ "classic75.json|Sapiens|Yuval Noah Harari|ebook": {
+  "work_id": "hardcover:375634",
+  "title": "Sapiens: A Brief History of Humankind",
+  "author": "Yuval Noah Harari"
+ },
+ "classic75.json|Six of Crows|Leigh Bardugo|audiobook": {
+  "work_id": "hardcover:1898835",
+  "title": "Six of Crows",
+  "author": "Leigh Bardugo"
+ },
+ "classic75.json|Six of Crows|Leigh Bardugo|ebook": {
+  "work_id": "hardcover:1898835",
+  "title": "Six of Crows",
+  "author": "Leigh Bardugo"
+ },
+ "classic75.json|Snow Crash|Neal Stephenson|audiobook": {
+  "work_id": "hardcover:92854",
+  "title": "Snow Crash",
+  "author": "Neal Stephenson"
+ },
+ "classic75.json|Snow Crash|Neal Stephenson|ebook": {
+  "work_id": "hardcover:92854",
+  "title": "Snow Crash",
+  "author": "Neal Stephenson"
+ },
+ "classic75.json|Team of Rivals|Doris Kearns Goodwin|audiobook": {
+  "work_id": "hardcover:381885",
+  "title": "Team of Rivals: The Political Genius of Abraham Lincoln ",
+  "author": "Doris Kearns Goodwin"
+ },
+ "classic75.json|Team of Rivals|Doris Kearns Goodwin|ebook": {
+  "work_id": "hardcover:381885",
+  "title": "Team of Rivals: The Political Genius of Abraham Lincoln ",
+  "author": "Doris Kearns Goodwin"
+ },
+ "classic75.json|The Blade Itself|Joe Abercrombie|audiobook": {
+  "work_id": "hardcover:383404",
+  "title": "The Blade Itself",
+  "author": "Joe Abercrombie"
+ },
+ "classic75.json|The Blade Itself|Joe Abercrombie|ebook": {
+  "work_id": "hardcover:383404",
+  "title": "The Blade Itself",
+  "author": "Joe Abercrombie"
+ },
+ "classic75.json|The Devil in the White City|Erik Larson|audiobook": {
+  "work_id": "hardcover:211614",
+  "title": "The Devil in the White City",
+  "author": "Erik Larson"
+ },
+ "classic75.json|The Devil in the White City|Erik Larson|ebook": {
+  "work_id": "hardcover:211614",
+  "title": "The Devil in the White City",
+  "author": "Erik Larson"
+ },
+ "classic75.json|The Eye of the World|Robert Jordan|audiobook": {
+  "work_id": "hardcover:77104",
+  "title": "The Eye of the World",
+  "author": "Robert Jordan"
+ },
+ "classic75.json|The Eye of the World|Robert Jordan|ebook": {
+  "work_id": "hardcover:77104",
+  "title": "The Eye of the World",
+  "author": "Robert Jordan"
+ },
+ "classic75.json|The Fault in Our Stars|John Green|audiobook": {
+  "work_id": "hardcover:197990",
+  "title": "The Fault in Our Stars",
+  "author": "John Green"
+ },
+ "classic75.json|The Fault in Our Stars|John Green|ebook": {
+  "work_id": "hardcover:197990",
+  "title": "The Fault in Our Stars",
+  "author": "John Green"
+ },
+ "classic75.json|The Fifth Season|N. K. Jemisin|audiobook": {
+  "work_id": "hardcover:427825",
+  "title": "The Fifth Season",
+  "author": "N. K. Jemisin"
+ },
+ "classic75.json|The Fifth Season|N. K. Jemisin|ebook": {
+  "work_id": "hardcover:427825",
+  "title": "The Fifth Season",
+  "author": "N. K. Jemisin"
+ },
+ "classic75.json|The Food Lab|J. Kenji Lopez-Alt|audiobook": {
+  "work_id": "hardcover:439669",
+  "title": "The Food Lab",
+  "author": "J. Kenji López-Alt"
+ },
+ "classic75.json|The Food Lab|J. Kenji Lopez-Alt|ebook": {
+  "work_id": "hardcover:439669",
+  "title": "The Food Lab",
+  "author": "J. Kenji López-Alt"
+ },
+ "classic75.json|The Girl with the Dragon Tattoo|Stieg Larsson|audiobook": {
+  "work_id": "hardcover:1218611",
+  "title": "The Girl with the Dragon Tattoo",
+  "author": "Stieg Larsson"
+ },
+ "classic75.json|The Girl with the Dragon Tattoo|Stieg Larsson|ebook": {
+  "work_id": "hardcover:1218611",
+  "title": "The Girl with the Dragon Tattoo",
+  "author": "Stieg Larsson"
+ },
+ "classic75.json|The Guns of August|Barbara Tuchman|audiobook": {
+  "work_id": "hardcover:381670",
+  "title": "The Guns of August",
+  "author": "Barbara W. Tuchman"
+ },
+ "classic75.json|The Guns of August|Barbara Tuchman|ebook": {
+  "work_id": "hardcover:381670",
+  "title": "The Guns of August",
+  "author": "Barbara W. Tuchman"
+ },
+ "classic75.json|The Hating Game|Sally Thorne|audiobook": {
+  "work_id": "hardcover:307275",
+  "title": "The Hating Game",
+  "author": "Sally  Thorne"
+ },
+ "classic75.json|The Hating Game|Sally Thorne|ebook": {
+  "work_id": "hardcover:307275",
+  "title": "The Hating Game",
+  "author": "Sally  Thorne"
+ },
+ "classic75.json|The Haunting of Hill House|Shirley Jackson|audiobook": {
+  "work_id": "hardcover:71005",
+  "title": "The Haunting of Hill House",
+  "author": "Shirley Jackson"
+ },
+ "classic75.json|The Haunting of Hill House|Shirley Jackson|ebook": {
+  "work_id": "hardcover:71005",
+  "title": "The Haunting of Hill House",
+  "author": "Shirley Jackson"
+ },
+ "classic75.json|The Hunger Games|Suzanne Collins|audiobook": {
+  "work_id": "hardcover:88639",
+  "title": "The Hunger Games",
+  "author": "Suzanne Collins"
+ },
+ "classic75.json|The Hunger Games|Suzanne Collins|ebook": {
+  "work_id": "hardcover:88639",
+  "title": "The Hunger Games",
+  "author": "Suzanne Collins"
+ },
+ "classic75.json|The Joy of Cooking|Irma Rombauer|audiobook": {
+  "work_id": "hardcover:860229",
+  "title": "The Joy of Cooking",
+  "author": "Irma S. Rombauer, Marion Rombauer Becker, Ethan Becker"
+ },
+ "classic75.json|The Joy of Cooking|Irma Rombauer|ebook": {
+  "work_id": "hardcover:860229",
+  "title": "The Joy of Cooking",
+  "author": "Irma S. Rombauer, Marion Rombauer Becker, Ethan Becker"
+ },
+ "classic75.json|The Lean Startup|Eric Ries|audiobook": {
+  "work_id": "hardcover:427367",
+  "title": "The Lean Startup: How Today's Entrepreneurs Use Continuous Innovation to Create Radically Successful Businesses",
+  "author": "Eric Ries"
+ },
+ "classic75.json|The Lean Startup|Eric Ries|ebook": {
+  "work_id": "hardcover:427367",
+  "title": "The Lean Startup: How Today's Entrepreneurs Use Continuous Innovation to Create Radically Successful Businesses",
+  "author": "Eric Ries"
+ },
+ "classic75.json|The Lies of Locke Lamora|Scott Lynch|audiobook": {
+  "work_id": "hardcover:380764",
+  "title": "The Lies of Locke Lamora",
+  "author": "Scott Lynch"
+ },
+ "classic75.json|The Lies of Locke Lamora|Scott Lynch|ebook": {
+  "work_id": "hardcover:380764",
+  "title": "The Lies of Locke Lamora",
+  "author": "Scott Lynch"
+ },
+ "classic75.json|The Name of the Wind|Patrick Rothfuss|audiobook": {
+  "work_id": "hardcover:379217",
+  "title": "The Name of the Wind",
+  "author": "Patrick Rothfuss"
+ },
+ "classic75.json|The Name of the Wind|Patrick Rothfuss|ebook": {
+  "work_id": "hardcover:379217",
+  "title": "The Name of the Wind",
+  "author": "Patrick Rothfuss"
+ },
+ "classic75.json|The Republic|Plato|audiobook": {
+  "work_id": "hardcover:2023750",
+  "title": "Plato : The Republic",
+  "author": "Plato"
+ },
+ "classic75.json|The Republic|Plato|ebook": {
+  "work_id": "hardcover:2023750",
+  "title": "Plato : The Republic",
+  "author": "Plato"
+ },
+ "classic75.json|The Road|Cormac McCarthy|audiobook": {
+  "work_id": "hardcover:2704920",
+  "title": "The Road",
+  "author": "McCarthy"
+ },
+ "classic75.json|The Road|Cormac McCarthy|ebook": {
+  "work_id": "hardcover:2704920",
+  "title": "The Road",
+  "author": "McCarthy"
+ },
+ "classic75.json|The Shadow of the Wind|Carlos Ruiz Zafon|audiobook": {
+  "work_id": "hardcover:375470",
+  "title": "The Shadow of the Wind",
+  "author": "Carlos Ruiz Zafón"
+ },
+ "classic75.json|The Shadow of the Wind|Carlos Ruiz Zafon|ebook": {
+  "work_id": "hardcover:375470",
+  "title": "The Shadow of the Wind",
+  "author": "Carlos Ruiz Zafón"
+ },
+ "classic75.json|The Silent Patient|Alex Michaelides|audiobook": {
+  "work_id": "hardcover:187993",
+  "title": "The Silent Patient",
+  "author": "Alex Michaelides"
+ },
+ "classic75.json|The Silent Patient|Alex Michaelides|ebook": {
+  "work_id": "hardcover:187993",
+  "title": "The Silent Patient",
+  "author": "Alex Michaelides"
+ },
+ "classic75.json|The Subtle Art of Not Giving a F*ck|Mark Manson|audiobook": {
+  "work_id": "hardcover:242987",
+  "title": "The Subtle Art of Not Giving a F*ck: A Counterintuitive Approach to Living a Good Life",
+  "author": "Mark Manson"
+ },
+ "classic75.json|The Subtle Art of Not Giving a F*ck|Mark Manson|ebook": {
+  "work_id": "hardcover:242987",
+  "title": "The Subtle Art of Not Giving a F*ck: A Counterintuitive Approach to Living a Good Life",
+  "author": "Mark Manson"
+ },
+ "classic75.json|The Thursday Murder Club|Richard Osman|audiobook": {
+  "work_id": "hardcover:437572",
+  "title": "The Thursday Murder Club",
+  "author": "Richard Osman"
+ },
+ "classic75.json|The Thursday Murder Club|Richard Osman|ebook": {
+  "work_id": "hardcover:437572",
+  "title": "The Thursday Murder Club",
+  "author": "Richard Osman"
+ },
+ "classic75.json|The Very Hungry Caterpillar|Eric Carle|audiobook": {
+  "work_id": "hardcover:332608",
+  "title": "The Very Hungry Caterpillar",
+  "author": "Eric Carle"
+ },
+ "classic75.json|The Very Hungry Caterpillar|Eric Carle|ebook": {
+  "work_id": "hardcover:332608",
+  "title": "The Very Hungry Caterpillar",
+  "author": "Eric Carle"
+ },
+ "classic75.json|The Way of Kings|Brandon Sanderson|audiobook": {
+  "work_id": "hardcover:386446",
+  "title": "The Way of Kings",
+  "author": "Brandon Sanderson"
+ },
+ "classic75.json|The Way of Kings|Brandon Sanderson|ebook": {
+  "work_id": "hardcover:386446",
+  "title": "The Way of Kings",
+  "author": "Brandon Sanderson"
+ },
+ "classic75.json|The Wind-Up Bird Chronicle|Haruki Murakami|audiobook": {
+  "work_id": "hardcover:469816",
+  "title": "The Wind-Up Bird Chronicle",
+  "author": "Haruki Murakami"
+ },
+ "classic75.json|The Wind-Up Bird Chronicle|Haruki Murakami|ebook": {
+  "work_id": "hardcover:469816",
+  "title": "The Wind-Up Bird Chronicle",
+  "author": "Haruki Murakami"
+ },
+ "classic75.json|Thinking, Fast and Slow|Daniel Kahneman|audiobook": {
+  "work_id": "hardcover:242841",
+  "title": "Thinking, Fast and Slow",
+  "author": "Daniel Kahneman"
+ },
+ "classic75.json|Thinking, Fast and Slow|Daniel Kahneman|ebook": {
+  "work_id": "hardcover:242841",
+  "title": "Thinking, Fast and Slow",
+  "author": "Daniel Kahneman"
+ },
+ "classic75.json|Unsouled|Will Wight|audiobook": {
+  "work_id": "hardcover:433546",
+  "title": "Unsouled",
+  "author": "Will Wight"
+ },
+ "classic75.json|Unsouled|Will Wight|ebook": {
+  "work_id": "hardcover:433546",
+  "title": "Unsouled",
+  "author": "Will Wight"
+ },
+ "classic75.json|Verity|Colleen Hoover|audiobook": {
+  "work_id": "hardcover:432760",
+  "title": "Verity",
+  "author": "Colleen Hoover"
+ },
+ "classic75.json|Verity|Colleen Hoover|ebook": {
+  "work_id": "hardcover:432760",
+  "title": "Verity",
+  "author": "Colleen Hoover"
+ },
+ "classic75.json|Watchmen|Alan Moore|audiobook": {
+  "work_id": "hardcover:308",
+  "title": "Watchmen",
+  "author": "Alan Moore"
+ },
+ "classic75.json|Watchmen|Alan Moore|ebook": {
+  "work_id": "hardcover:308",
+  "title": "Watchmen",
+  "author": "Alan Moore"
+ },
+ "classic75.json|When Breath Becomes Air|Paul Kalanithi|audiobook": {
+  "work_id": "hardcover:1352790",
+  "title": "When Breath Becomes Air",
+  "author": "Paul Kalanithi, Abraham Verghese"
+ },
+ "classic75.json|When Breath Becomes Air|Paul Kalanithi|ebook": {
+  "work_id": "hardcover:1352790",
+  "title": "When Breath Becomes Air",
+  "author": "Paul Kalanithi, Abraham Verghese"
+ },
+ "classic75.json|Where the Wild Things Are|Maurice Sendak|audiobook": {
+  "work_id": "hardcover:216846",
+  "title": "Where the Wild Things Are",
+  "author": "Maurice Sendak"
+ },
+ "classic75.json|Where the Wild Things Are|Maurice Sendak|ebook": {
+  "work_id": "hardcover:216846",
+  "title": "Where the Wild Things Are",
+  "author": "Maurice Sendak"
+ },
+ "classic75.json|Zero to One|Peter Thiel|audiobook": {
+  "work_id": "hardcover:2648934",
+  "title": "Zero to one: creëer de toekomst: wat iedere ondernemer kan leren van Silicon Valley",
+  "author": "Peter Thiel"
+ },
+ "classic75.json|Zero to One|Peter Thiel|ebook": {
+  "work_id": "hardcover:2648934",
+  "title": "Zero to one: creëer de toekomst: wat iedere ondernemer kan leren van Silicon Valley",
+  "author": "Peter Thiel"
+ },
+ "heldout50.json|A Game of Thrones|George R. R. Martin|audiobook": {
+  "work_id": "hardcover:644",
+  "title": "A Game of Thrones",
+  "author": "George R.R. Martin"
+ },
+ "heldout50.json|A Game of Thrones|George R. R. Martin|ebook": {
+  "work_id": "hardcover:644",
+  "title": "A Game of Thrones",
+  "author": "George R.R. Martin"
+ },
+ "heldout50.json|A Short History of Nearly Everything|Bill Bryson|audiobook": {
+  "work_id": "hardcover:385032",
+  "title": "A Short History of Nearly Everything",
+  "author": "Bill Bryson"
+ },
+ "heldout50.json|A Short History of Nearly Everything|Bill Bryson|ebook": {
+  "work_id": "hardcover:385032",
+  "title": "A Short History of Nearly Everything",
+  "author": "Bill Bryson"
+ },
+ "heldout50.json|Annihilation|Jeff VanderMeer|audiobook": {
+  "work_id": "hardcover:192491",
+  "title": "Annihilation",
+  "author": "Jeff VanderMeer"
+ },
+ "heldout50.json|Annihilation|Jeff VanderMeer|ebook": {
+  "work_id": "hardcover:192491",
+  "title": "Annihilation",
+  "author": "Jeff VanderMeer"
+ },
+ "heldout50.json|Assassin's Apprentice|Robin Hobb|audiobook": {
+  "work_id": "hardcover:427336",
+  "title": "Assassin's Apprentice",
+  "author": "Robin Hobb"
+ },
+ "heldout50.json|Assassin's Apprentice|Robin Hobb|ebook": {
+  "work_id": "hardcover:427336",
+  "title": "Assassin's Apprentice",
+  "author": "Robin Hobb"
+ },
+ "heldout50.json|Between the World and Me|Ta-Nehisi Coates|audiobook": {
+  "work_id": "hardcover:383308",
+  "title": "Between the World and Me",
+  "author": "Ta-Nehisi Coates"
+ },
+ "heldout50.json|Between the World and Me|Ta-Nehisi Coates|ebook": {
+  "work_id": "hardcover:383308",
+  "title": "Between the World and Me",
+  "author": "Ta-Nehisi Coates"
+ },
+ "heldout50.json|Beware of Chicken|CasualFarmer|audiobook": {
+  "work_id": "hardcover:545658",
+  "title": "Beware of Chicken",
+  "author": "CasualFarmer"
+ },
+ "heldout50.json|Beware of Chicken|CasualFarmer|ebook": {
+  "work_id": "hardcover:545658",
+  "title": "Beware of Chicken",
+  "author": "CasualFarmer"
+ },
+ "heldout50.json|Brave New World|Aldous Huxley|audiobook": {
+  "work_id": "hardcover:374328",
+  "title": "Brave New World",
+  "author": "Aldous Huxley"
+ },
+ "heldout50.json|Brave New World|Aldous Huxley|ebook": {
+  "work_id": "hardcover:374328",
+  "title": "Brave New World",
+  "author": "Aldous Huxley"
+ },
+ "heldout50.json|Cradle: Unsouled|Will Wight|audiobook": {
+  "work_id": "hardcover:433546",
+  "title": "Unsouled",
+  "author": "Will Wight"
+ },
+ "heldout50.json|Cradle: Unsouled|Will Wight|ebook": {
+  "work_id": "hardcover:433546",
+  "title": "Unsouled",
+  "author": "Will Wight"
+ },
+ "heldout50.json|Fahrenheit 451|Ray Bradbury|audiobook": {
+  "work_id": "hardcover:375938",
+  "title": "Fahrenheit 451",
+  "author": "Ray Bradbury"
+ },
+ "heldout50.json|Fahrenheit 451|Ray Bradbury|ebook": {
+  "work_id": "hardcover:375938",
+  "title": "Fahrenheit 451",
+  "author": "Ray Bradbury"
+ },
+ "heldout50.json|Gardens of the Moon|Steven Erikson|audiobook": {
+  "work_id": "hardcover:319998",
+  "title": "Gardens of the Moon",
+  "author": "Steven Erikson"
+ },
+ "heldout50.json|Gardens of the Moon|Steven Erikson|ebook": {
+  "work_id": "hardcover:319998",
+  "title": "Gardens of the Moon",
+  "author": "Steven Erikson"
+ },
+ "heldout50.json|Grit|Angela Duckworth|audiobook": {
+  "work_id": "hardcover:41196",
+  "title": "Grit: The Power of Passion and Perseverance",
+  "author": "Angela Duckworth"
+ },
+ "heldout50.json|Grit|Angela Duckworth|ebook": {
+  "work_id": "hardcover:41196",
+  "title": "Grit: The Power of Passion and Perseverance",
+  "author": "Angela Duckworth"
+ },
+ "heldout50.json|Guns, Germs, and Steel|Jared Diamond|audiobook": {
+  "work_id": "hardcover:427440",
+  "title": "Guns, Germs and Steel: A Short History of Everybody for the Last 13,000 Years",
+  "author": "Jared Diamond"
+ },
+ "heldout50.json|Guns, Germs, and Steel|Jared Diamond|ebook": {
+  "work_id": "hardcover:427440",
+  "title": "Guns, Germs and Steel: A Short History of Everybody for the Last 13,000 Years",
+  "author": "Jared Diamond"
+ },
+ "heldout50.json|Ice Planet Barbarians|Ruby Dixon|audiobook": {
+  "work_id": "hardcover:506322",
+  "title": "Ice Planet Barbarians",
+  "author": "Ruby Dixon"
+ },
+ "heldout50.json|Ice Planet Barbarians|Ruby Dixon|ebook": {
+  "work_id": "hardcover:506322",
+  "title": "Ice Planet Barbarians",
+  "author": "Ruby Dixon"
+ },
+ "heldout50.json|Just Mercy|Bryan Stevenson|audiobook": {
+  "work_id": "hardcover:382044",
+  "title": "Just Mercy: A Story of Justice and Redemption",
+  "author": "Bryan Stevenson"
+ },
+ "heldout50.json|Just Mercy|Bryan Stevenson|ebook": {
+  "work_id": "hardcover:382044",
+  "title": "Just Mercy: A Story of Justice and Redemption",
+  "author": "Bryan Stevenson"
+ },
+ "heldout50.json|Legends \u0026 Lattes|Travis Baldree|audiobook": {
+  "work_id": "hardcover:475214",
+  "title": "Legends \u0026 Lattes",
+  "author": "Travis Baldree"
+ },
+ "heldout50.json|Legends \u0026 Lattes|Travis Baldree|ebook": {
+  "work_id": "hardcover:475214",
+  "title": "Legends \u0026 Lattes",
+  "author": "Travis Baldree"
+ },
+ "heldout50.json|Lord of the Flies|William Golding|audiobook": {
+  "work_id": "hardcover:2704893",
+  "title": "Lord of the Flies",
+  "author": "Golding"
+ },
+ "heldout50.json|Lord of the Flies|William Golding|ebook": {
+  "work_id": "hardcover:2704893",
+  "title": "Lord of the Flies",
+  "author": "Golding"
+ },
+ "heldout50.json|Man's Search for Meaning|Viktor Frankl|audiobook": {
+  "work_id": "hardcover:495645",
+  "title": "Man's Search for Meaning",
+  "author": "Viktor E. Frankl"
+ },
+ "heldout50.json|Man's Search for Meaning|Viktor Frankl|ebook": {
+  "work_id": "hardcover:495645",
+  "title": "Man's Search for Meaning",
+  "author": "Viktor E. Frankl"
+ },
+ "heldout50.json|Mexican Gothic|Silvia Moreno-Garcia|audiobook": {
+  "work_id": "hardcover:428353",
+  "title": "Mexican Gothic",
+  "author": "Silvia Moreno-Garcia"
+ },
+ "heldout50.json|Mexican Gothic|Silvia Moreno-Garcia|ebook": {
+  "work_id": "hardcover:428353",
+  "title": "Mexican Gothic",
+  "author": "Silvia Moreno-Garcia"
+ },
+ "heldout50.json|My Brilliant Friend|Elena Ferrante|audiobook": {
+  "work_id": "hardcover:1809",
+  "title": "My Brilliant Friend",
+  "author": "Elena Ferrante"
+ },
+ "heldout50.json|My Brilliant Friend|Elena Ferrante|ebook": {
+  "work_id": "hardcover:1809",
+  "title": "My Brilliant Friend",
+  "author": "Elena Ferrante"
+ },
+ "heldout50.json|Never Let Me Go|Kazuo Ishiguro|audiobook": {
+  "work_id": "hardcover:132314",
+  "title": "Never Let Me Go",
+  "author": "Kazuo Ishiguro"
+ },
+ "heldout50.json|Never Let Me Go|Kazuo Ishiguro|ebook": {
+  "work_id": "hardcover:132314",
+  "title": "Never Let Me Go",
+  "author": "Kazuo Ishiguro"
+ },
+ "heldout50.json|Never Split the Difference|Chris Voss|audiobook": {
+  "work_id": "hardcover:429888",
+  "title": "Never Split the Difference: Negotiating As If Your Life Depended On It",
+  "author": "Chris Voss"
+ },
+ "heldout50.json|Never Split the Difference|Chris Voss|ebook": {
+  "work_id": "hardcover:429888",
+  "title": "Never Split the Difference: Negotiating As If Your Life Depended On It",
+  "author": "Chris Voss"
+ },
+ "heldout50.json|Norwegian Wood|Haruki Murakami|audiobook": {
+  "work_id": "hardcover:776952",
+  "title": "Norwegian Wood",
+  "author": "Haruki Murakami"
+ },
+ "heldout50.json|Norwegian Wood|Haruki Murakami|ebook": {
+  "work_id": "hardcover:776952",
+  "title": "Norwegian Wood",
+  "author": "Haruki Murakami"
+ },
+ "heldout50.json|Of Mice and Men|John Steinbeck|audiobook": {
+  "work_id": "hardcover:378949",
+  "title": "Of Mice and Men",
+  "author": "John Steinbeck"
+ },
+ "heldout50.json|Of Mice and Men|John Steinbeck|ebook": {
+  "work_id": "hardcover:378949",
+  "title": "Of Mice and Men",
+  "author": "John Steinbeck"
+ },
+ "heldout50.json|People We Meet on Vacation|Emily Henry|audiobook": {
+  "work_id": "hardcover:432661",
+  "title": "People We Meet on Vacation",
+  "author": "Emily Henry"
+ },
+ "heldout50.json|People We Meet on Vacation|Emily Henry|ebook": {
+  "work_id": "hardcover:432661",
+  "title": "People We Meet on Vacation",
+  "author": "Emily Henry"
+ },
+ "heldout50.json|Perfume|Patrick Suskind|audiobook": {
+  "work_id": "hardcover:2010782",
+  "title": "Perfume",
+  "author": "Patrick Süskind"
+ },
+ "heldout50.json|Perfume|Patrick Suskind|ebook": {
+  "work_id": "hardcover:2010782",
+  "title": "Perfume",
+  "author": "Patrick Süskind"
+ },
+ "heldout50.json|Piranesi|Susanna Clarke|audiobook": {
+  "work_id": "hardcover:175280",
+  "title": "Piranesi",
+  "author": "Susanna Clarke"
+ },
+ "heldout50.json|Piranesi|Susanna Clarke|ebook": {
+  "work_id": "hardcover:175280",
+  "title": "Piranesi",
+  "author": "Susanna Clarke"
+ },
+ "heldout50.json|Quiet|Susan Cain|audiobook": {
+  "work_id": "hardcover:817984",
+  "title": "Quiet : The Power of Introverts in a World That Can't Stop Talking",
+  "author": "Susan Cain"
+ },
+ "heldout50.json|Quiet|Susan Cain|ebook": {
+  "work_id": "hardcover:817984",
+  "title": "Quiet : The Power of Introverts in a World That Can't Stop Talking",
+  "author": "Susan Cain"
+ },
+ "heldout50.json|Range|David Epstein|audiobook": {
+  "work_id": "hardcover:1190045",
+  "title": "Range: How Generalists Triumph in a Specialized World",
+  "author": "David Epstein"
+ },
+ "heldout50.json|Range|David Epstein|ebook": {
+  "work_id": "hardcover:1190045",
+  "title": "Range: How Generalists Triumph in a Specialized World",
+  "author": "David Epstein"
+ },
+ "heldout50.json|Recursion|Blake Crouch|audiobook": {
+  "work_id": "hardcover:202782",
+  "title": "Recursion",
+  "author": "Blake Crouch"
+ },
+ "heldout50.json|Recursion|Blake Crouch|ebook": {
+  "work_id": "hardcover:202782",
+  "title": "Recursion",
+  "author": "Blake Crouch"
+ },
+ "heldout50.json|Red Rising|Pierce Brown|audiobook": {
+  "work_id": "hardcover:427473",
+  "title": "Red Rising",
+  "author": "Pierce Brown"
+ },
+ "heldout50.json|Red Rising|Pierce Brown|ebook": {
+  "work_id": "hardcover:427473",
+  "title": "Red Rising",
+  "author": "Pierce Brown"
+ },
+ "heldout50.json|Station Eleven|Emily St. John Mandel|audiobook": {
+  "work_id": "hardcover:427463",
+  "title": "Station Eleven",
+  "author": "Emily St. John Mandel"
+ },
+ "heldout50.json|Station Eleven|Emily St. John Mandel|ebook": {
+  "work_id": "hardcover:427463",
+  "title": "Station Eleven",
+  "author": "Emily St. John Mandel"
+ },
+ "heldout50.json|The Body Keeps the Score|Bessel van der Kolk|audiobook": {
+  "work_id": "hardcover:358355",
+  "title": "The Body Keeps the Score: Brain, Mind, and Body in the Healing of Trauma",
+  "author": "Bessel van der Kolk"
+ },
+ "heldout50.json|The Body Keeps the Score|Bessel van der Kolk|ebook": {
+  "work_id": "hardcover:358355",
+  "title": "The Body Keeps the Score: Brain, Mind, and Body in the Healing of Trauma",
+  "author": "Bessel van der Kolk"
+ },
+ "heldout50.json|The Final Empire|Brandon Sanderson|audiobook": {
+  "work_id": "hardcover:369692",
+  "title": "Mistborn: The Final Empire",
+  "author": "Brandon Sanderson"
+ },
+ "heldout50.json|The Final Empire|Brandon Sanderson|ebook": {
+  "work_id": "hardcover:369692",
+  "title": "Mistborn: The Final Empire",
+  "author": "Brandon Sanderson"
+ },
+ "heldout50.json|The Glass Castle|Jeannette Walls|audiobook": {
+  "work_id": "hardcover:12666",
+  "title": "The Glass Castle",
+  "author": "Jeannette Walls"
+ },
+ "heldout50.json|The Glass Castle|Jeannette Walls|ebook": {
+  "work_id": "hardcover:12666",
+  "title": "The Glass Castle",
+  "author": "Jeannette Walls"
+ },
+ "heldout50.json|The Great Gatsby|F. Scott Fitzgerald|audiobook": {
+  "work_id": "hardcover:377193",
+  "title": "The Great Gatsby",
+  "author": "F. Scott Fitzgerald"
+ },
+ "heldout50.json|The Great Gatsby|F. Scott Fitzgerald|ebook": {
+  "work_id": "hardcover:377193",
+  "title": "The Great Gatsby",
+  "author": "F. Scott Fitzgerald"
+ },
+ "heldout50.json|The Gunslinger|Stephen King|audiobook": {
+  "work_id": "hardcover:229579",
+  "title": "The Gunslinger",
+  "author": "Stephen King"
+ },
+ "heldout50.json|The Gunslinger|Stephen King|ebook": {
+  "work_id": "hardcover:229579",
+  "title": "The Gunslinger",
+  "author": "Stephen King"
+ },
+ "heldout50.json|The House in the Cerulean Sea|TJ Klune|audiobook": {
+  "work_id": "hardcover:436805",
+  "title": "The House in the Cerulean Sea",
+  "author": "TJ Klune"
+ },
+ "heldout50.json|The House in the Cerulean Sea|TJ Klune|ebook": {
+  "work_id": "hardcover:436805",
+  "title": "The House in the Cerulean Sea",
+  "author": "TJ Klune"
+ },
+ "heldout50.json|The Immortal Life of Henrietta Lacks|Rebecca Skloot|audiobook": {
+  "work_id": "hardcover:510471",
+  "title": "The Immortal Life of Henrietta Lacks",
+  "author": "Rebecca Skloot"
+ },
+ "heldout50.json|The Immortal Life of Henrietta Lacks|Rebecca Skloot|ebook": {
+  "work_id": "hardcover:510471",
+  "title": "The Immortal Life of Henrietta Lacks",
+  "author": "Rebecca Skloot"
+ },
+ "heldout50.json|The Land: Founding|Aleron Kong|audiobook": {
+  "work_id": "hardcover:427586",
+  "title": "The Land: Founding",
+  "author": "Aleron Kong"
+ },
+ "heldout50.json|The Land: Founding|Aleron Kong|ebook": {
+  "work_id": "hardcover:427586",
+  "title": "The Land: Founding",
+  "author": "Aleron Kong"
+ },
+ "heldout50.json|The Legend of Randidly Ghosthound|Noret Flood|audiobook": {
+  "work_id": "hardcover:769409",
+  "title": "The Legend of Randidly Ghosthound",
+  "author": "Noret Flood"
+ },
+ "heldout50.json|The Legend of Randidly Ghosthound|Noret Flood|ebook": {
+  "work_id": "hardcover:769409",
+  "title": "The Legend of Randidly Ghosthound",
+  "author": "Noret Flood"
+ },
+ "heldout50.json|The Power of Habit|Charles Duhigg|audiobook": {
+  "work_id": "hardcover:1315363",
+  "title": "The Power of Habit: Why We Do What We Do, and How to Change",
+  "author": "Charles Duhigg"
+ },
+ "heldout50.json|The Power of Habit|Charles Duhigg|ebook": {
+  "work_id": "hardcover:1315363",
+  "title": "The Power of Habit: Why We Do What We Do, and How to Change",
+  "author": "Charles Duhigg"
+ },
+ "heldout50.json|The Seven Husbands of Evelyn Hugo|Taylor Jenkins Reid|audiobook": {
+  "work_id": "hardcover:340654",
+  "title": "The Seven Husbands of Evelyn Hugo",
+  "author": "Taylor Jenkins Reid"
+ },
+ "heldout50.json|The Seven Husbands of Evelyn Hugo|Taylor Jenkins Reid|ebook": {
+  "work_id": "hardcover:340654",
+  "title": "The Seven Husbands of Evelyn Hugo",
+  "author": "Taylor Jenkins Reid"
+ },
+ "heldout50.json|The Sixth Extinction|Elizabeth Kolbert|audiobook": {
+  "work_id": "hardcover:721861",
+  "title": "The Sixth Extinction: An Unnatural History",
+  "author": "Elizabeth Kolbert"
+ },
+ "heldout50.json|The Sixth Extinction|Elizabeth Kolbert|ebook": {
+  "work_id": "hardcover:721861",
+  "title": "The Sixth Extinction: An Unnatural History",
+  "author": "Elizabeth Kolbert"
+ },
+ "heldout50.json|The Spanish Love Deception|Elena Armas|audiobook": {
+  "work_id": "hardcover:431690",
+  "title": "The Spanish Love Deception",
+  "author": "Elena Armas"
+ },
+ "heldout50.json|The Spanish Love Deception|Elena Armas|ebook": {
+  "work_id": "hardcover:431690",
+  "title": "The Spanish Love Deception",
+  "author": "Elena Armas"
+ },
+ "heldout50.json|The Three-Body Problem|Cixin Liu|audiobook": {
+  "work_id": "hardcover:208339",
+  "title": "The Three-Body Problem",
+  "author": "Cixin Liu"
+ },
+ "heldout50.json|The Three-Body Problem|Cixin Liu|ebook": {
+  "work_id": "hardcover:208339",
+  "title": "The Three-Body Problem",
+  "author": "Cixin Liu"
+ },
+ "heldout50.json|The Troop|Nick Cutter|audiobook": {
+  "work_id": "hardcover:23801",
+  "title": "The Troop",
+  "author": "Nick Cutter"
+ },
+ "heldout50.json|The Troop|Nick Cutter|ebook": {
+  "work_id": "hardcover:23801",
+  "title": "The Troop",
+  "author": "Nick Cutter"
+ },
+ "heldout50.json|The Vegetarian|Han Kang|audiobook": {
+  "work_id": "hardcover:443673",
+  "title": "The Vegetarian",
+  "author": "Han Kang"
+ },
+ "heldout50.json|The Vegetarian|Han Kang|ebook": {
+  "work_id": "hardcover:443673",
+  "title": "The Vegetarian",
+  "author": "Han Kang"
+ },
+ "heldout50.json|The Way of Shadows|Brent Weeks|audiobook": {
+  "work_id": "hardcover:196346",
+  "title": "The Way of Shadows",
+  "author": "Brent Weeks"
+ },
+ "heldout50.json|The Way of Shadows|Brent Weeks|ebook": {
+  "work_id": "hardcover:196346",
+  "title": "The Way of Shadows",
+  "author": "Brent Weeks"
+ },
+ "heldout50.json|Thinking in Systems|Donella Meadows|audiobook": {
+  "work_id": "hardcover:1101699",
+  "title": "Thinking in Systems: A Primer",
+  "author": "Donella Meadows"
+ },
+ "heldout50.json|Thinking in Systems|Donella Meadows|ebook": {
+  "work_id": "hardcover:1101699",
+  "title": "Thinking in Systems: A Primer",
+  "author": "Donella Meadows"
+ },
+ "heldout50.json|Wild|Cheryl Strayed|audiobook": {
+  "work_id": "hardcover:52808",
+  "title": "Wild: From Lost to Found on the Pacific Crest Trail",
+  "author": "Cheryl Strayed"
+ },
+ "heldout50.json|Wild|Cheryl Strayed|ebook": {
+  "work_id": "hardcover:52808",
+  "title": "Wild: From Lost to Found on the Pacific Crest Trail",
+  "author": "Cheryl Strayed"
+ }
+}

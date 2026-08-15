@@ -270,9 +270,30 @@ that history and uses `SERVICE_API_TOKEN` when configured.
 ## Tests
 
 ```sh
-go test ./...          # unit and handler tests, no network required
+go test ./...          # unit, handler, and corpus tests; no network required
 go vet ./...
 ```
+
+### The resolution corpus
+
+`cmd/book-discovery/testdata/corpus/` holds real Shelfarr metadata captured
+once from a live instance: 125 books across 25 genres plus a set of
+adversarial cases. `TestResolutionCorpus` replays all of it through the actual
+resolution path — 262 resolutions, every book as both an ebook and an
+audiobook — in under a second, with no Shelfarr, no Ollama, and no network.
+
+This exists because resolution accuracy is not something unit tests can speak
+to. Every real defect found so far was a whole-corpus behaviour, and three
+separate regressions were caught only by re-running the full set after a fix.
+
+After an intentional behaviour change:
+
+```sh
+go test ./cmd/book-discovery -run TestResolutionCorpus -update
+```
+
+then read the diff. A change to `expected.json` is a change to which book gets
+acquired, so review it as carefully as the code that caused it.
 
 The Shelfarr tests run against a stub that mirrors the live contract: bearer
 auth, a `401` without it, and the API hanging off whatever base path
