@@ -13,7 +13,12 @@ stored in the repository.
 ```text
 SEARXNG_URL=https://search.example.invalid
 OLLAMA_URL=http://ollama:11434
-OLLAMA_MODEL=qwen3:8b
+# Optional. If omitted, /api/ps is checked first, then /api/tags.
+OLLAMA_MODEL=
+SHELFARR_URL=http://shelfarr:5056
+SHELFARR_API_TOKEN=...
+# Optional protection for this service's write endpoint.
+SERVICE_API_TOKEN=...
 LISTEN_ADDR=:8080
 ```
 
@@ -28,6 +33,19 @@ curl -X POST http://localhost:8080/v1/discover \
 The response includes ranked candidate URLs and a confidence score. If Ollama
 is unavailable, the service returns deterministic title/creator text matching
 with `ranked_by: deterministic`.
+
+## Creating a Shelfarr request
+
+`POST /v1/requests` resolves a title through Shelfarr's metadata API when no
+`work_id` is supplied, then creates the request through Shelfarr's scoped API.
+It defaults to an audiobook unless `kind` is `ebook` or `book`.
+
+```sh
+curl -X POST http://localhost:8080/v1/requests \
+  -H 'content-type: application/json' \
+  -H "authorization: Bearer $SERVICE_API_TOKEN" \
+  -d '{"kind":"audiobook","title":"Cappadonna","creator":"Jahquel J.","notes":"Created from discovery"}'
+```
 
 ## Run
 
